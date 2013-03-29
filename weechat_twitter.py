@@ -31,8 +31,8 @@ except:
 # If you want to change it you can register your own keys at:
 # https://dev.twitter.com/apps/new
 
-CONSUMER_SECRET = 'MEYTOS97VvlHX7K1rwHPEqVpTSqZ71HtvoK4sVuYk'
-CONSUMER_KEY = 'uS6hO2sV6tDKIOeVjhnFnQ'
+CONSUMER_SECRET = 'ivx3oxxkSOAOofRuhmGXQK4nkLFNXD94wbJiRUBhN1g'
+CONSUMER_KEY = 'NVkYe8DAeaw6YRcjw662ZQ'
 
 script_options = {
     "oauth_token" : "",
