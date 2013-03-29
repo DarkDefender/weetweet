@@ -380,19 +380,19 @@ def oauth_dance(buffer, pin = ""):
     """ + oauth_url)
 
         script_options['oauth_token'] = oauth_token
-        script_options['oauth_token_secret'] = oauth_token_secret
+        script_options['oauth_secret'] = oauth_token_secret
     else:
         oauth_verifier = pin.strip()
         twitter = Twitter(
             auth=OAuth(
-                script_options['oauth_token'], script_options['oauth_token_secret'],
+                script_options['oauth_token'], script_options['oauth_secret'],
                 CONSUMER_KEY, CONSUMER_SECRET),
             format='', api_version=None)
         oauth_token, oauth_token_secret = parse_oauth_tokens(
             twitter.oauth.access_token(oauth_verifier=oauth_verifier))
         
         weechat.config_set_plugin('oauth_token', oauth_token)
-        weechat.config_set_plugin('oauth_secret', oauth_secret)
+        weechat.config_set_plugin('oauth_secret', oauth_token_secret)
         finish_init()
         weechat.config_set_plugin('verified', 'yes')
 
