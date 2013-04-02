@@ -47,6 +47,21 @@ tweet_dict = {'cur_index': "a0"}
 
 SCRIPT_NAME = "twitter"
 add_last_id = False
+twit_buf = ""
+timer_hook = ""
+
+
+html_escape_table = {
+    "&": "&amp;",
+    '"': "&quot;",
+    "'": "&apos;",
+    ">": "&gt;",
+    "<": "&lt;",
+    }
+
+def html_escape(text):
+    """Produce entities within text."""
+    return "".join(html_escape_table.get(c,c) for c in text)
 
 def dict_tweet(tweet_id):
     cur_index = tweet_dict['cur_index']
@@ -137,12 +152,14 @@ def get_twitter_data(cmd_args):
     # Read the oauth token and auth with the twitter api.
     # Return the requested tweets
 
+    h = html.parser.HTMLParser()
+    
     if len(cmd_args) < 2:
         return "invalid command"
 
     oauth_token = cmd_args[1]
     oauth_secret= cmd_args[2]
-    
+
     if len(cmd_args) == 5 and cmd_args[3] == 'th':
         #use the old api to get the thread from a tweet
         #This is unoffical and might stop working at any moment
@@ -181,9 +198,9 @@ def get_twitter_data(cmd_args):
         elif len(cmd_args) >= 5 and cmd_args[3] == "t":
             #returns the tweet that was sent (not a list(dict) just a dict)
             #make it into a list so we don't have to write special cases for this
-            tweet_data = [twitter.statuses.update(status=" ".join(cmd_args[4:]))]
+            tweet_data = [twitter.statuses.update(status=h.unescape(" ".join(cmd_args[4:])))]
         elif len(cmd_args) >= 6 and cmd_args[3] == "re":
-            tweet_data = [twitter.statuses.update(status=" ".join(cmd_args[5:]),
+            tweet_data = [twitter.statuses.update(status=h.unescape(" ".join(cmd_args[5:])),
                 in_reply_to_status_id=cmd_args[4])]
         elif len(cmd_args) == 5 and cmd_args[3] == "new":
             tweet_data = twitter.statuses.home_timeline(since_id = cmd_args[4]) 
@@ -200,8 +217,6 @@ def get_twitter_data(cmd_args):
     # Because of the huge amount of data, we need to cut down on most of it because we only really want
     # a small subset of it. This also prevents the output buffer from overflowing when fetching many tweets
     # at once.
-    h = html.parser.HTMLParser()
-    
     output = []
     for message in tweet_data:
         output.append({'user': {'screen_name': message['user']['screen_name']},
@@ -253,9 +268,11 @@ def buffer_input_cb(data, buffer, input_data):
             end_message = "Done"
     else:
         add_last_id = True
-        input_data = 't ' + input_data
+        #esacpe special chars when printing to commandline
+        input_data = 't ' + html_escape(input_data)
+        #input_data = 't ' + html.escape(input_data)
 
-    weechat.hook_process("python .weechat/python/test.py " +
+    weechat.hook_process("python3 .weechat/python/weechat_twitter.py " +
                 script_options["oauth_token"] + " " + script_options["oauth_secret"] + " " +
                 input_data, 10 * 1000, "my_process_cb", end_message)
     return weechat.WEECHAT_RC_OK
@@ -393,8 +410,8 @@ def oauth_dance(buffer, pin = ""):
         
         weechat.config_set_plugin('oauth_token', oauth_token)
         weechat.config_set_plugin('oauth_secret', oauth_token_secret)
-        finish_init()
         weechat.config_set_plugin('verified', 'yes')
+        finish_init()
 
 def parse_oauth_tokens(result):
     for r in result.split('&'):
