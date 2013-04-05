@@ -4,9 +4,10 @@ import re
 import os
 
 # TODO:
-# Blocking
-# Favs
+# Fix follow/unfollow
+# Blocking (More work on it)
 # Show followers/friends (change api call because the current is problematic)
+# Be able to go backwards in statuses/favs
 
 # This twitter plugin can be extended even more. Just look at the twitter api
 # doc here: https://dev.twitter.com/docs/api/1.1
@@ -126,7 +127,8 @@ def my_process_cb(data, command, rc, out, err):
         process_output = ast.literal_eval(out)
     if int(rc) >= 0:
         buffer = twit_buf
-        if data == "Following" or data == "Followers":
+        #List message
+        if len(data) >= 1 and data[0] == "L":
             if len(process_output) > 60:
                 t_id = dict_tweet(str(process_output[60])) + "\t"
                 process_output = process_output[:60]
@@ -138,7 +140,7 @@ def my_process_cb(data, command, rc, out, err):
             for nick in process_output:
                 add_to_nicklist(buffer,nick)
             weechat.prnt_date_tags(buffer, 0, "no_highlight",
-                    "%s%s: %s%s" % (t_id, data, process_output, end_mes))
+                    "%s%s: %s%s" % (t_id, data[1:], process_output, end_mes))
             return weechat.WEECHAT_RC_OK
 
         if data == "About":
@@ -262,6 +264,25 @@ def get_twitter_data(cmd_args):
             return friend_list
         elif len(cmd_args) == 5 and cmd_args[3] == "a":
             return twitter.users.show(screen_name = cmd_args[4])
+        elif len(cmd_args) == 5 and cmd_args[3] == "b":
+            tweet_data = twitter.blocks.create(screen_name = cmd_args[4]) 
+        elif len(cmd_args) == 5 and cmd_args[3] == "ub":
+            tweet_data = twitter.blocks.destroy(screen_name = cmd_args[4]) 
+        elif len(cmd_args) == 4 and cmd_args[3] == "blocks":
+            tweet_data = twitter.blocks.list(skip_status = True) 
+            block_list = list()
+            for user in tweet_data['users']:
+                block_list.append(users['screen_name'])
+            return block_list
+        elif len(cmd_args) == 5 and cmd_args[3] == "fav":
+            tweet_data = [twitter.favorites.create(id=cmd_args[4])]
+        elif len(cmd_args) == 5 and cmd_args[3] == "unfav":
+            tweet_data = [twitter.favorites.destroy(id=cmd_args[4])]
+        elif len(cmd_args) >= 4 and cmd_args[3] == "favs":
+            if len(cmd_args) == 5:
+                tweet_data = twitter.favorites.list(screen_name=cmd_args[4])
+            else:
+                tweet_data = twitter.favorites.list()
         else:
             tweet_data = twitter.statuses.home_timeline()
 
@@ -326,12 +347,22 @@ def buffer_input_cb(data, buffer, input_data):
             else:
                 input_data = command + " " + script_options['screen_name']
             if command == 'f':
-                end_message = "Following"
+                #L because we are returning a list later on
+                end_message = "LFollowing"
             else:
-                end_message = "Followers"
+                end_message = "LFollowers"
         elif input_args[0][1:] == 'a':
             input_data = input_data[1:]
             end_message = "About"
+        elif input_args[0][1:] == 'blocks':
+            input_data = input_data[1:]
+            end_message = "LBlock list"
+        elif input_args[0][1:] == 'fav' and input_args[1] in tweet_dict:
+            input_data = 'fav ' + tweet_dict[input_args[1]]
+            weechat.prnt(buffer, "%sYou fave'd the following tweet:" % weechat.prefix("network"))
+        elif input_args[0][1:] == 'unfav' and input_args[1] in tweet_dict:
+            input_data = 'unfav ' + tweet_dict[input_args[1]]
+            weechat.prnt(buffer, "%sYou unfave'd the following tweet:" % weechat.prefix("network"))
         else:
             input_data = input_data[1:]
             end_message = "Done"
