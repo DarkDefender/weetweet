@@ -1,6 +1,7 @@
 import sys
 import ast
 import re
+import os
 
 # This twitter plugin can be extended even more. Just look at the twitter api
 # doc here: https://dev.twitter.com/docs/api/1.1
@@ -46,17 +47,16 @@ script_options = {
 tweet_dict = {'cur_index': "a0"}
 
 SCRIPT_NAME = "twitter"
+SCRIPT_FILE_PATH = os.path.abspath(__file__)
+
 add_last_id = False
 twit_buf = ""
 timer_hook = ""
 
 
 html_escape_table = {
-    "&": "&amp;",
     '"': "&quot;",
     "'": "&apos;",
-    ">": "&gt;",
-    "<": "&lt;",
     }
 
 def html_escape(text):
@@ -112,7 +112,7 @@ def colorize_twit(text):
         match = re.search(regex,word)
         if str(type(match)) == "<type '_sre.SRE_Match'>":
             nick = word[match.start(1):match.end(0)]
-            buffer = weechat.buffer_search("python", "twitter")
+            buffer = twit_buf
             add_to_nicklist(buffer,nick)
             #nick_color = weechat.info_get('irc_nick_color', nick)
             #new_word = word.replace(nick, '%s%s%s' % (nick_color,nick,reset))
@@ -125,7 +125,7 @@ def my_process_cb(data, command, rc, out, err):
     if out != "":
         process_output = ast.literal_eval(out)
     if int(rc) >= 0:
-        buffer = weechat.buffer_search("python", "twitter")
+        buffer = twit_buf
         for message in process_output:
             message['text'] = colorize_twit(message['text'])
             nick = message['user']['screen_name']
@@ -269,10 +269,10 @@ def buffer_input_cb(data, buffer, input_data):
     else:
         add_last_id = True
         #esacpe special chars when printing to commandline
-        input_data = 't ' + html_escape(input_data)
+        input_data = 't ' + "'" + html_escape(input_data) + "'"
         #input_data = 't ' + html.escape(input_data)
 
-    weechat.hook_process("python3 .weechat/python/weechat_twitter.py " +
+    weechat.hook_process("python3 " + SCRIPT_FILE_PATH + " " +
                 script_options["oauth_token"] + " " + script_options["oauth_secret"] + " " +
                 input_data, 10 * 1000, "my_process_cb", end_message)
     return weechat.WEECHAT_RC_OK
@@ -341,7 +341,7 @@ def tweet_length(message):
 
 def my_modifier_cb(data, modifier, modifier_data, string):
     #TODO don't count commandline arguments
-    if weechat.current_buffer() != buffer:
+    if weechat.current_buffer() != twit_buf:
         return string
 
     #check if this is a commandline argument
@@ -423,9 +423,11 @@ def parse_oauth_tokens(result):
     return oauth_token, oauth_token_secret
 
 def finish_init():
-    buffer = weechat.buffer_search("python", "twitter")
+    global timer_hook
+
+    buffer = twit_buf
     # timer called each minute when second is 00
-    weechat.hook_timer(60 * 1000, 60, 0, "timer_cb", "")
+    timer_hook = weechat.hook_timer(60 * 1000, 60, 0, "timer_cb", "")
 
     if script_options['screen_name'] == "":
         user_nick = get_twitter_data(['settings', script_options["oauth_token"], script_options["oauth_secret"]])['screen_name'] 
@@ -438,9 +440,12 @@ def finish_init():
     add_to_nicklist(buffer, user_nick)
     # Highlight user nick
     weechat.buffer_set(buffer, "highlight_words", user_nick)
+    #Get latest tweets from timeline
+    buffer_input_cb("silent", buffer, ":new") 
 
 if __name__ == "__main__" and weechat_call:
     weechat.register( SCRIPT_NAME , "DarkDefender", "1.0", "GPL3", "Weechat twitter client", "close_cb", "")
+
     if not import_ok:
         weechat.prnt("", "Can't load the python twitter lib!")
         weechat.prnt("", "Install it via your package manager or go to http://mike.verdone.ca/twitter/")
@@ -459,16 +464,19 @@ if __name__ == "__main__" and weechat_call:
         weechat.hook_config("plugins.var.python." + SCRIPT_NAME + ".*", "config_cb", "")
 
         # create buffer
-        buffer = weechat.buffer_new("twitter", "buffer_input_cb", "", "buffer_close_cb", "")
+        twit_buf = weechat.buffer_new("twitter", "buffer_input_cb", "", "buffer_close_cb", "")
         
         # set title
-        weechat.buffer_set(buffer, "title", "Twitter buffer, type ':help' for options.")
+        weechat.buffer_set(twit_buf, "title", "Twitter buffer, type ':help' for options.")
         
         # disable logging, by setting local variable "no_log" to "1"
-        weechat.buffer_set(buffer, "localvar_set_no_log", "1")
+        weechat.buffer_set(twit_buf, "localvar_set_no_log", "1")
 
         #show nicklist
-        weechat.buffer_set(buffer, "nicklist", "1")
+        weechat.buffer_set(twit_buf, "nicklist", "1")
+
+        #newline autocomplete
+        weechat.nicklist_add_nick(twit_buf, "", "&#13;&#10;", 'bar_fg', '', '', 1)
 
         #Hook text input so we can update the bar item
         weechat.hook_modifier("input_text_display", "my_modifier_cb", "")
@@ -476,7 +484,7 @@ if __name__ == "__main__" and weechat_call:
         if script_options['verified'] == 'yes':
             finish_init()
         else:
-            weechat.prnt(buffer,"""You have to register this plugin with twitter for it to work.
+            weechat.prnt(twit_buf,"""You have to register this plugin with twitter for it to work.
 Type ":auth" and follow the instructions to do that""")
 
 elif import_ok: 
