@@ -4,7 +4,6 @@ import re
 import os
 
 # TODO:
-# Fix follow/unfollow
 # Blocking (More work on it)
 # Show followers/friends (change api call because the current is problematic)
 # Be able to go backwards in statuses/favs
@@ -121,13 +120,20 @@ def parse_for_nicks(text):
             add_to_nicklist(buffer,nick)
 
 def my_process_cb(data, command, rc, out, err):
-    process_output = list()
     global add_last_id
+
+    if rc == weechat.WEECHAT_HOOK_PROCESS_ERROR:
+        weechat.prnt("", "Error with command '%s'" % command)
+        return weechat.WEECHAT_RC_OK
+
     if out != "":
-        process_output = ast.literal_eval(out)
-    if int(rc) >= 0:
         buffer = twit_buf
+        if out[0] != "[":
+            weechat.prnt(buffer,out)
+            return weechat.WEECHAT_RC_OK
+        process_output = ast.literal_eval(out)
         #List message
+        # TODO blocks returns more then 60
         if len(data) >= 1 and data[0] == "L":
             if len(process_output) > 60:
                 t_id = dict_tweet(str(process_output[60])) + "\t"
@@ -171,12 +177,15 @@ def my_process_cb(data, command, rc, out, err):
                     "%s%s\t%s" % (nick, t_id, message['text']))
         if add_last_id == True:
             add_last_id = False
-            if process_output != []:
+            try:
                 script_options['last_id'] = process_output[-1]['id_str']
+            except:
+                pass
 
         if data != "":
             weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"), data))
-
+    if err != "":
+        weechat.prnt("", "stderr: %s" % err)
     return weechat.WEECHAT_RC_OK
 
 def get_twitter_data(cmd_args):
@@ -185,107 +194,108 @@ def get_twitter_data(cmd_args):
 
     h = html.parser.HTMLParser()
     
-    if len(cmd_args) < 2:
-        return "invalid command"
+    if len(cmd_args) < 3:
+        return "Invalid command"
 
     oauth_token = cmd_args[1]
     oauth_secret= cmd_args[2]
-
-    if len(cmd_args) == 5 and cmd_args[3] == 'th':
-        #use the old api to get the thread from a tweet
-        #This is unoffical and might stop working at any moment
-        twitter = Twitter(
-            auth=OAuth(
-                oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
-            secure=True,
-            api_version='1',
-            domain='api.twitter.com')
-        tweet_data = twitter.related_results.show._(cmd_args[4])()
-        #convert to new api data type
-        new_data = []
-        for data in tweet_data[0]['results']:
-            new_data.append(data['value'])
-
-        tweet_data = new_data
-        tweet_data.reverse()
-    else:
-        twitter = Twitter(auth=OAuth(
-        oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET))
-
-        if len(cmd_args) == 5 and cmd_args[3] == "u":
-            kwargs = dict(count=20, screen_name=cmd_args[4])
-            tweet_data = twitter.statuses.user_timeline(**kwargs)
-        elif len(cmd_args) == 4 and cmd_args[3] == "r":
-            tweet_data = twitter.statuses.mentions_timeline()
-        elif len(cmd_args) == 5 and cmd_args[3] == "v":
-            tweet_data = [twitter.statuses.show._(cmd_args[4])()]
-        elif len(cmd_args) == 5 and cmd_args[3] == "rt":
-            tweet_data = [twitter.statuses.retweet._(cmd_args[4])()]
-        elif len(cmd_args) == 5 and cmd_args[3] == "d":
-            #deletes tweet made by the user _(...) converts the id string to a call
-            #returns the tweet that was deleted (not a list(dict) just a dict)
-            #make it into a list so we don't have to write special cases for this
-            tweet_data = [twitter.statuses.destroy._(cmd_args[4])()]
-        elif len(cmd_args) >= 5 and cmd_args[3] == "t":
-            #returns the tweet that was sent (not a list(dict) just a dict)
-            #make it into a list so we don't have to write special cases for this
-            tweet_data = [twitter.statuses.update(status=h.unescape(" ".join(cmd_args[4:])))]
-        elif len(cmd_args) >= 6 and cmd_args[3] == "re":
-            tweet_data = [twitter.statuses.update(status=h.unescape(" ".join(cmd_args[5:])),
-                in_reply_to_status_id=cmd_args[4])]
-        elif len(cmd_args) == 5 and cmd_args[3] == "new":
-            tweet_data = twitter.statuses.home_timeline(since_id = cmd_args[4]) 
-        elif len(cmd_args) == 5 and cmd_args[3] == "follow":
-            tweet_data = twitter.friendships.create(screen_name = cmd_args[4]) 
-        elif len(cmd_args) == 5 and cmd_args[3] == "unfollow":
-            tweet_data = twitter.friendships.destroy(screen_name = cmd_args[4])
-        elif len(cmd_args) == 3 and cmd_args[0] == "settings":
-            #this only gets called from within weechat
-            return twitter.account.settings()
-        elif len(cmd_args) >= 5 and (cmd_args[3] == "f" or cmd_args[3] == "fo"):
-            if len(cmd_args) == 6:
-                kwargs = dict(screen_name = cmd_args[4], skip_status = True, cursor = int(cmd_args[5]))
-            else:
-                kwargs = dict(screen_name = cmd_args[4], skip_status = True, cursor = -1)
-            friend_list = list()
-            num = 1
-            #Get max 20*3 users
-            while(kwargs['cursor'] != 0 and num <= 3):
-                if cmd_args[3] == "f":
-                    tweet_data = twitter.friends.list(**kwargs)
-                else:
-                    tweet_data = twitter.followers.list(**kwargs)
-                kwargs['cursor'] = tweet_data['next_cursor']
-                num += 1
-                for user in tweet_data['users']:
-                    friend_list.append(user['screen_name'])
-            if kwargs['cursor'] != 0:
-                friend_list.append(kwargs['cursor'])
-            return friend_list
-        elif len(cmd_args) == 5 and cmd_args[3] == "a":
-            return twitter.users.show(screen_name = cmd_args[4])
-        elif len(cmd_args) == 5 and cmd_args[3] == "b":
-            tweet_data = twitter.blocks.create(screen_name = cmd_args[4]) 
-        elif len(cmd_args) == 5 and cmd_args[3] == "ub":
-            tweet_data = twitter.blocks.destroy(screen_name = cmd_args[4]) 
-        elif len(cmd_args) == 4 and cmd_args[3] == "blocks":
-            tweet_data = twitter.blocks.list(skip_status = True) 
-            block_list = list()
-            for user in tweet_data['users']:
-                block_list.append(users['screen_name'])
-            return block_list
-        elif len(cmd_args) == 5 and cmd_args[3] == "fav":
-            tweet_data = [twitter.favorites.create(id=cmd_args[4])]
-        elif len(cmd_args) == 5 and cmd_args[3] == "unfav":
-            tweet_data = [twitter.favorites.destroy(id=cmd_args[4])]
-        elif len(cmd_args) >= 4 and cmd_args[3] == "favs":
-            if len(cmd_args) == 5:
-                tweet_data = twitter.favorites.list(screen_name=cmd_args[4])
-            else:
-                tweet_data = twitter.favorites.list()
+    try:
+        if cmd_args[3] == 'th':
+            #use the old api to get the thread from a tweet
+            #This is unoffical and might stop working at any moment
+            twitter = Twitter(
+                auth=OAuth(
+                    oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
+                secure=True,
+                api_version='1',
+                domain='api.twitter.com')
+            tweet_data = twitter.related_results.show._(cmd_args[4])()
+            #convert to new api data type
+            new_data = []
+            for data in tweet_data[0]['results']:
+                new_data.append(data['value'])
+    
+            tweet_data = new_data
+            tweet_data.reverse()
         else:
-            tweet_data = twitter.statuses.home_timeline()
-
+            twitter = Twitter(auth=OAuth(
+            oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET))
+    
+            if cmd_args[3] == "u":
+                kwargs = dict(count=20, screen_name=cmd_args[4])
+                tweet_data = twitter.statuses.user_timeline(**kwargs)
+            elif cmd_args[3] == "r":
+                tweet_data = twitter.statuses.mentions_timeline()
+            elif cmd_args[3] == "v":
+                tweet_data = [twitter.statuses.show._(cmd_args[4])()]
+            elif cmd_args[3] == "rt":
+                tweet_data = [twitter.statuses.retweet._(cmd_args[4])()]
+            elif cmd_args[3] == "d":
+                #deletes tweet made by the user _(...) converts the id string to a call
+                #returns the tweet that was deleted (not a list(dict) just a dict)
+                #make it into a list so we don't have to write special cases for this
+                tweet_data = [twitter.statuses.destroy._(cmd_args[4])()]
+            elif cmd_args[3] == "t":
+                #returns the tweet that was sent (not a list(dict) just a dict)
+                #make it into a list so we don't have to write special cases for this
+                tweet_data = [twitter.statuses.update(status=h.unescape(" ".join(cmd_args[4:])))]
+            elif cmd_args[3] == "re":
+                tweet_data = [twitter.statuses.update(status=h.unescape(" ".join(cmd_args[5:])),
+                    in_reply_to_status_id=cmd_args[4])]
+            elif cmd_args[3] == "new":
+                tweet_data = twitter.statuses.home_timeline(since_id = cmd_args[4]) 
+            elif cmd_args[3] == "follow":
+                tweet_data = twitter.friendships.create(screen_name = cmd_args[4]) 
+            elif cmd_args[3] == "unfollow":
+                tweet_data = twitter.friendships.destroy(screen_name = cmd_args[4])
+            elif cmd_args[0] == "settings":
+                #this only gets called from within weechat
+                return twitter.account.settings()
+            elif cmd_args[3] == "f" or cmd_args[3] == "fo":
+                if len(cmd_args) == 6:
+                    kwargs = dict(screen_name = cmd_args[4], skip_status = True, cursor = int(cmd_args[5]))
+                else:
+                    kwargs = dict(screen_name = cmd_args[4], skip_status = True, cursor = -1)
+                friend_list = list()
+                num = 1
+                #Get max 20*3 users
+                while(kwargs['cursor'] != 0 and num <= 3):
+                    if cmd_args[3] == "f":
+                        tweet_data = twitter.friends.list(**kwargs)
+                    else:
+                        tweet_data = twitter.followers.list(**kwargs)
+                    kwargs['cursor'] = tweet_data['next_cursor']
+                    num += 1
+                    for user in tweet_data['users']:
+                        friend_list.append(user['screen_name'])
+                if kwargs['cursor'] != 0:
+                    friend_list.append(kwargs['cursor'])
+                return friend_list
+            elif cmd_args[3] == "a":
+                return twitter.users.show(screen_name = cmd_args[4])
+            elif cmd_args[3] == "b":
+                tweet_data = twitter.blocks.create(screen_name = cmd_args[4]) 
+            elif cmd_args[3] == "ub":
+                tweet_data = twitter.blocks.destroy(screen_name = cmd_args[4]) 
+            elif cmd_args[3] == "blocks":
+                tweet_data = twitter.blocks.list(skip_status = True) 
+                block_list = list()
+                for user in tweet_data['users']:
+                    block_list.append(users['screen_name'])
+                return block_list
+            elif cmd_args[3] == "fav":
+                tweet_data = [twitter.favorites.create(id=cmd_args[4])]
+            elif cmd_args[3] == "unfav":
+                tweet_data = [twitter.favorites.destroy(id=cmd_args[4])]
+            elif cmd_args[3] == "favs":
+                if len(cmd_args) == 5:
+                    tweet_data = twitter.favorites.list(screen_name=cmd_args[4])
+                else:
+                    tweet_data = twitter.favorites.list()
+            else:
+                tweet_data = twitter.statuses.home_timeline()
+    except:
+        return "Invalid command: " + " ".join(cmd_args)
     # Because of the huge amount of data, we need to cut down on most of it because we only really want
     # a small subset of it. This also prevents the output buffer from overflowing when fetching many tweets
     # at once.
