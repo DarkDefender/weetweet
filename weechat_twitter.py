@@ -355,7 +355,7 @@ def buffer_input_cb(data, buffer, input_data):
             if script_options['last_id'] != "":
                 input_data = 'new ' + script_options['last_id']
             else:
-                input_data = 'update'
+                input_data = 'home'
         elif input_args[0][1:] == 'auth':
             if len(input_args) == 2:
                 oauth_dance(buffer,input_args[1])
