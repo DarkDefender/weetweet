@@ -123,13 +123,14 @@ def my_process_cb(data, command, rc, out, err):
     global add_last_id
 
     if rc == weechat.WEECHAT_HOOK_PROCESS_ERROR:
-        weechat.prnt("", "Error with command '%s'" % command)
+        weechat.prnt("", "Error with command '%s'" %
+                command.replace(script_options["oauth_token"],"").replace(script_options["oauth_secret"],""))
         return weechat.WEECHAT_RC_OK
 
     if out != "":
         buffer = twit_buf
         if out[0] != "[":
-            weechat.prnt(buffer,out)
+            weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"), out))
             return weechat.WEECHAT_RC_OK
         process_output = ast.literal_eval(out)
         #List message
@@ -292,8 +293,23 @@ def get_twitter_data(cmd_args):
                     tweet_data = twitter.favorites.list(screen_name=cmd_args[4])
                 else:
                     tweet_data = twitter.favorites.list()
-            else:
+            elif cmd_args[3] == "limits":
+                output = ""
+                if len(cmd_args) == 5:
+                    tweet_data = twitter.application.rate_limit_status(resources=cmd_args[4])
+                else:
+                    tweet_data = twitter.application.rate_limit_status()
+                for res in tweet_data['resources']:
+                    output += res + ":\n"
+                    for sub_res in tweet_data['resources'][res]:
+                        output += "  " + sub_res[len(res)+2:] + ":\n"
+                        for data in tweet_data['resources'][res][sub_res]:
+                            output += "    " + data + ": " + str(tweet_data['resources'][res][sub_res][data]) + "\n"
+                return output
+            elif cmd_args[3] == "home":
                 tweet_data = twitter.statuses.home_timeline()
+            else:
+                return "Invalid command: " + cmd_args[3]
     except:
         return "Invalid command: " + " ".join(cmd_args)
     # Because of the huge amount of data, we need to cut down on most of it because we only really want
