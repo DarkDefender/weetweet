@@ -58,6 +58,8 @@ SCRIPT_FILE_PATH = os.path.abspath(__file__)
 
 twit_buf = ""
 timer_hook = ""
+tweet_nicks_group = ""
+friends_nicks_group = ""
 #For delaying the home timeline update function so we do go over the rate limit
 home_counter = 0
 
@@ -101,9 +103,11 @@ def config_cb(data, option, value):
     read_config()
     return weechat.WEECHAT_RC_OK
 
-def add_to_nicklist(buf, nick):
+def add_to_nicklist(buf, nick, group=""):
     """Add nick to the nicklist."""
-    weechat.nicklist_add_nick(buf, "", nick, 'bar_fg', '', '', 1)
+    if group == "":
+        group = friends_nicks_group
+    weechat.nicklist_add_nick(buf, group, nick, 'bar_fg', '', '', 1)
 
 def remove_from_nicklist(buf, nick):
     """Remove nick from the nicklist."""
@@ -111,6 +115,13 @@ def remove_from_nicklist(buf, nick):
     weechat.nicklist_remove_nick(buf, nick_ptr)
 
 def parse_for_nicks(text):
+    global tweet_nicks_group 
+    
+    if tweet_nicks_group == "":
+        tweet_nicks_group = weechat.nicklist_add_group(twit_buf,
+                    "", "Tweet_parse",
+                    "weechat.color.nicklist_group", 1)
+    
     #Parse text for twitter nicks and add them to nicklist
     regex = re.compile(r'@([A-Za-z0-9_]+)')
     reset = weechat.color('reset')
@@ -118,8 +129,7 @@ def parse_for_nicks(text):
         match = re.search(regex,word)
         if str(type(match)) == "<type '_sre.SRE_Match'>":
             nick = word[match.start(1):match.end(0)]
-            buffer = twit_buf
-            add_to_nicklist(buffer,nick)
+            add_to_nicklist(twit_buf,nick,tweet_nicks_group)
 
 def my_process_cb(data, command, rc, out, err):
 
@@ -171,7 +181,7 @@ def my_process_cb(data, command, rc, out, err):
         for message in process_output:
             parse_for_nicks(message[3])
             nick = message[1]
-            add_to_nicklist(buffer,nick)
+            add_to_nicklist(buffer,nick,tweet_nicks_group)
 
             if script_options['print_id'] == 'on':
                 t_id = weechat.color('reset') + ' ' + dict_tweet(message[2])
@@ -360,7 +370,7 @@ def get_twitter_data(cmd_args):
             else:
                 return "Invalid command: " + cmd_args[3]
     except:
-        return "Unexpected error in get_twitter_data:%s" % sys.exc_info()[0]
+        return "Unexpected error in get_twitter_data:%s\n Call: %s" % (sys.exc_info()[0], cmd_args[3]) 
     # Because of the huge amount of data, we need to cut down on most of it because we only really want
     # a small subset of it. This also prevents the output buffer from overflowing when fetching many tweets
     # at once.
@@ -483,6 +493,12 @@ def buffer_input_cb(data, buffer, input_data):
         elif command == 'unfav' and input_args[1] in tweet_dict:
             input_data = 'unfav ' + tweet_dict[input_args[1]]
             weechat.prnt(buffer, "%sYou unfave'd the following tweet:" % weechat.prefix("network"))
+        elif command == 'cnicks':
+            global tweet_nicks_group
+            if tweet_nicks_group != "":
+                weechat.nicklist_remove_group(buffer, tweet_nicks_group)
+                tweet_nicks_group = ""
+            return weechat.WEECHAT_RC_OK
         else:
             input_data = input_data[1:]
             end_message = "Done"
@@ -645,8 +661,6 @@ def finish_init():
     global home_counter
 
     buffer = twit_buf
-    # timer called each minute when second is 00
-    timer_hook = weechat.hook_timer(60 * 1000, 60, 0, "timer_cb", "")
 
     if script_options['screen_name'] == "":
         user_nick = get_twitter_data(['settings', script_options["oauth_token"], script_options["oauth_secret"]])['screen_name'] 
@@ -664,6 +678,8 @@ def finish_init():
     #Get latest tweets from timeline
     buffer_input_cb("silent", buffer, ":new")
     home_counter += 1
+    # timer called each minute when second is 00
+    timer_hook = weechat.hook_timer(60 * 1000, 60, 0, "timer_cb", "")
 
 if __name__ == "__main__" and weechat_call:
     weechat.register( SCRIPT_NAME , "DarkDefender", "1.0", "GPL3", "Weechat twitter client", "", "")
@@ -694,11 +710,17 @@ if __name__ == "__main__" and weechat_call:
         # disable logging, by setting local variable "no_log" to "1"
         weechat.buffer_set(twit_buf, "localvar_set_no_log", "1")
 
+        #create main nicklist
+        friends_nicks_group = weechat.nicklist_add_group(twit_buf, "", "Friends",
+                    "weechat.color.nicklist_group", 1)
+
         #show nicklist
         weechat.buffer_set(twit_buf, "nicklist", "1")
 
+        autocomp_group = weechat.nicklist_add_group(twit_buf, "", "Autocomp",
+                    "weechat.color.nicklist_group", 1)
         #newline autocomplete
-        weechat.nicklist_add_nick(twit_buf, "", "&#13;&#10;", 'bar_fg', '', '', 1)
+        weechat.nicklist_add_nick(twit_buf, autocomp_group, "&#13;&#10;", 'bar_fg', '', '', 1)
 
         #Hook text input so we can update the bar item
         weechat.hook_modifier("input_text_display", "my_modifier_cb", "")
