@@ -6,9 +6,9 @@ import time
 import calendar
 
 # TODO:
-# Blocking (More work on it)
+# Blocking (More work/testing on it)
+# Replace the thread call old api will be blocked soon
 # Show followers/friends (change api call because the current is problematic)
-# Be able to go backwards in statuses/favs
 
 # This twitter plugin can be extended even more. Just look at the twitter api
 # doc here: https://dev.twitter.com/docs/api/1.1
@@ -58,6 +58,7 @@ SCRIPT_FILE_PATH = os.path.abspath(__file__)
 
 twit_buf = ""
 timer_hook = ""
+#For delaying the home timeline update function so we do go over the rate limit
 home_counter = 0
 
 html_escape_table = {
@@ -210,8 +211,8 @@ def get_twitter_data(cmd_args):
     oauth_secret= cmd_args[2]
     try:
         if cmd_args[3] == 'th':
-            #use the old api to get the thread from a tweet
-            #This is unoffical and might stop working at any moment
+            # use the old api to get the thread from a tweet
+            # NOTE This is unoffical and might stop working at any moment
             twitter = Twitter(
                 auth=OAuth(
                     oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
@@ -232,9 +233,26 @@ def get_twitter_data(cmd_args):
     
             if cmd_args[3] == "u":
                 kwargs = dict(count=20, screen_name=cmd_args[4])
+                if len(cmd_args) == 7:
+                    kwargs['count'] = int(cmd_args[6])
+                    kwargs['max_id'] = cmd_args[5]
+                elif len(cmd_args) == 6:
+                    if int(cmd_args[5]) <= 200:
+                        kwargs['count'] = int(cmd_args[5])
+                    else:
+                        kwargs['max_id'] = cmd_args[5]
                 tweet_data = twitter.statuses.user_timeline(**kwargs)
             elif cmd_args[3] == "r":
-                tweet_data = twitter.statuses.mentions_timeline()
+                if len(cmd_args) == 6:
+                    kwargs = dict(count=int(cmd_args[5]), max_id=cmd_args[4])
+                    tweet_data = twitter.statuses.mentions_timeline(**kwargs)
+                elif len(cmd_args) == 5:
+                    if int(cmd_args[4]) <= 200:
+                        tweet_data = twitter.statuses.mentions_timeline(count=int(cmd_args[4]))
+                    else:
+                        tweet_data = twitter.statuses.mentions_timeline(max_id=cmd_args[4])
+                else:
+                    tweet_data = twitter.statuses.mentions_timeline()
             elif cmd_args[3] == "v":
                 tweet_data = [twitter.statuses.show._(cmd_args[4])()]
             elif cmd_args[3] == "rt":
@@ -252,7 +270,7 @@ def get_twitter_data(cmd_args):
                 tweet_data = [twitter.statuses.update(status=h.unescape(" ".join(cmd_args[5:])),
                     in_reply_to_status_id=cmd_args[4])]
             elif cmd_args[3] == "new":
-                tweet_data = twitter.statuses.home_timeline(since_id = cmd_args[4]) 
+                tweet_data = twitter.statuses.home_timeline(since_id = cmd_args[4], count=200) 
             elif cmd_args[3] == "follow":
                 tweet_data = twitter.friendships.create(screen_name = cmd_args[4]) 
             elif cmd_args[3] == "unfollow":
@@ -297,8 +315,20 @@ def get_twitter_data(cmd_args):
             elif cmd_args[3] == "unfav":
                 tweet_data = [twitter.favorites.destroy(id=cmd_args[4])]
             elif cmd_args[3] == "favs":
-                if len(cmd_args) == 5:
-                    tweet_data = twitter.favorites.list(screen_name=cmd_args[4])
+                if len(cmd_args) >= 5:
+                    kwargs = dict()
+                    if not cmd_args[4].isdigit():
+                        kwargs['screen_name'] = cmd_args[4]
+                        cmd_args.pop(4)
+                    if len(cmd_args) == 5:
+                        if int(cmd_args[4]) <= 200:
+                            kwargs['count'] = int(cmd_args[4])
+                        else:
+                            kwargs['max_id'] = cmd_args[4]
+                    elif len(cmd_args) == 6:
+                        kwargs['count'] = int(cmd_args[5])
+                        kwargs['max_id'] = cmd_args[4]
+                    tweet_data = twitter.favorites.list(**kwargs)
                 else:
                     tweet_data = twitter.favorites.list()
             elif cmd_args[3] == "limits":
@@ -317,11 +347,20 @@ def get_twitter_data(cmd_args):
                         output += "    " + 'remaining' + ": " + str(tweet_data['resources'][res][sub_res]['remaining']) + "\n"
                 return output
             elif cmd_args[3] == "home":
-                tweet_data = twitter.statuses.home_timeline()
+                if len(cmd_args) == 6:
+                    kwargs = dict(count=int(cmd_args[5]), max_id=cmd_args[4])
+                    tweet_data = twitter.statuses.home_timeline(**kwargs)
+                elif len(cmd_args) == 5:
+                    if int(cmd_args[4]) <= 200:
+                        tweet_data = twitter.statuses.home_timeline(count=int(cmd_args[4]))
+                    else:
+                        tweet_data = twitter.statuses.home_timeline(max_id=cmd_args[4])
+                else:
+                    tweet_data = twitter.statuses.home_timeline()
             else:
                 return "Invalid command: " + cmd_args[3]
     except:
-        return "Invalid command: " + " ".join(cmd_args)
+        return "Unexpected error in get_twitter_data:%s" % sys.exc_info()[0]
     # Because of the huge amount of data, we need to cut down on most of it because we only really want
     # a small subset of it. This also prevents the output buffer from overflowing when fetching many tweets
     # at once.
@@ -371,11 +410,46 @@ def buffer_input_cb(data, buffer, input_data):
             if data != "silent":
                 #Delay the home timeline update so we don't go over the api req limits
                 home_counter += 1
-                end_message = "Done"
-        elif command == 'home':
-            input_data = 'home'
-            #Delay the home timeline update so we don't go over the api req limits
-            home_counter += 1
+        elif command == 'home' or command == 'r' or (command == 'favs' and len(input_args) >= 2 and input_args[1].isdigit()):
+            if command == 'home':
+                input_data = 'home'
+                #Delay the home timeline update so we don't go over the api req limits
+                home_counter += 1
+            else:
+                input_data = command
+            if len(input_args) == 3 and input_args[1] in tweet_dict and input_args[2].isdigit():
+                num = int(input_args[2])
+                # 200 tweets is the max request limit
+                if num <= 200 and num > 0:
+                    input_data += " " + tweet_dict[input_args[1]] + " " + input_args[2]
+                else:
+                    input_data += " " + tweet_dict[input_args[1]]
+            elif len(input_args) == 2:
+                if input_args[1] in tweet_dict:
+                    input_data += " " + tweet_dict[input_args[1]]
+                elif input_args[1].isdigit():
+                    num = int(input_args[1])
+                    # 200 tweets is the max request limit
+                    if num <= 200 and num > 0:
+                        input_data += " " + input_args[1]
+            end_message = "Done"
+        elif command == 'u' or (command == 'favs' and len(input_args) >= 3):
+            input_data = " ".join(input_args[:2])[1:]
+            if len(input_args) == 4 and input_args[2] in tweet_dict and input_args[3].isdigit():
+                num = int(input_args[3])
+                # 200 tweets is the max request limit
+                if num <= 200 and num > 0:
+                    input_data += " " + tweet_dict[input_args[2]] + " " + input_args[3]
+                else:
+                    input_data += " " + tweet_dict[input_args[2]]
+            elif len(input_args) == 3:
+                if input_args[2] in tweet_dict:
+                    input_data += " " + tweet_dict[input_args[2]]
+                elif input_args[2].isdigit():
+                    num = int(input_args[2])
+                    # 200 tweets is the max request limit
+                    if num <= 200 and num > 0:
+                        input_data += " " + input_args[2]
             end_message = "Done"
         elif command == 'auth':
             if len(input_args) == 2:
@@ -568,6 +642,7 @@ def parse_oauth_tokens(result):
 
 def finish_init():
     global timer_hook
+    global home_counter
 
     buffer = twit_buf
     # timer called each minute when second is 00
@@ -588,9 +663,10 @@ def finish_init():
     buffer_input_cb("silent", buffer, ":f")
     #Get latest tweets from timeline
     buffer_input_cb("silent", buffer, ":new")
+    home_counter += 1
 
 if __name__ == "__main__" and weechat_call:
-    weechat.register( SCRIPT_NAME , "DarkDefender", "1.0", "GPL3", "Weechat twitter client", "close_cb", "")
+    weechat.register( SCRIPT_NAME , "DarkDefender", "1.0", "GPL3", "Weechat twitter client", "", "")
 
     if not import_ok:
         weechat.prnt("", "Can't load the python twitter lib!")
