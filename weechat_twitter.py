@@ -326,9 +326,9 @@ def get_twitter_data(cmd_args):
                     block_list.append(user['screen_name'])
                 return block_list
             elif cmd_args[3] == "fav":
-                tweet_data = [twitter.favorites.create(id=cmd_args[4])]
+                tweet_data = [twitter.favorites.create(_id=cmd_args[4])]
             elif cmd_args[3] == "unfav":
-                tweet_data = [twitter.favorites.destroy(id=cmd_args[4])]
+                tweet_data = [twitter.favorites.destroy(_id=cmd_args[4])]
             elif cmd_args[3] == "favs":
                 if len(cmd_args) >= 5:
                     kwargs = dict()
