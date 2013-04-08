@@ -58,7 +58,7 @@ SCRIPT_FILE_PATH = os.path.abspath(__file__)
 
 twit_buf = ""
 timer_hook = ""
-
+home_counter = 0
 
 html_escape_table = {
     '"': "&quot;",
@@ -130,6 +130,7 @@ def my_process_cb(data, command, rc, out, err):
     if out != "":
         buffer = twit_buf
         if out[0] != "[" and out[0] != "{":
+            #If message is just a string print it
             weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"), out))
             return weechat.WEECHAT_RC_OK
         process_output = ast.literal_eval(out)
@@ -164,6 +165,8 @@ def my_process_cb(data, command, rc, out, err):
             weechat.prnt(buffer, "Are you currently following this person: %s" % (process_output['following']))
             return weechat.WEECHAT_RC_OK
 
+        cur_date = time.strftime("%Y-%m-%d", time.gmtime())
+
         for message in process_output:
             parse_for_nicks(message[3])
             nick = message[1]
@@ -173,6 +176,11 @@ def my_process_cb(data, command, rc, out, err):
                 t_id = weechat.color('reset') + ' ' + dict_tweet(message[2])
             else:
                 t_id = ''
+
+            mes_date = time.strftime("%Y-%m-%d", time.gmtime(message[0]))
+            if cur_date != mes_date:
+                cur_date = mes_date
+                weechat.prnt(buffer, "\t\tDate: " + cur_date)
 
             weechat.prnt_date_tags(buffer, message[0], "notify_message",
                     "%s%s\t%s" % (nick, t_id, message[3]))
@@ -329,40 +337,49 @@ def get_twitter_data(cmd_args):
 # callback for data received in input
 def buffer_input_cb(data, buffer, input_data):
     # ...
+    global home_counter
     end_message = ""
 
     if input_data[0] == ':':
         if data != "silent":
             weechat.prnt_date_tags(buffer, 0, "no_highlight", input_data)
         input_args = input_data.split()
-        if input_args[0][1:] == 'd' and input_args[1] in tweet_dict:
+        command = input_args[0][1:]
+        if command == 'd' and input_args[1] in tweet_dict:
             input_data = 'd ' + tweet_dict[input_args[1]]
             weechat.prnt(buffer, "%sYou deleted the following tweet:" % weechat.prefix("network"))
-        elif input_args[0][1:] == 'v' and input_args[1] in tweet_dict:
+        elif command == 'v' and input_args[1] in tweet_dict:
             input_data = 'v ' + tweet_dict[input_args[1]]
-        elif input_args[0][1:] == 'rt' and input_args[1] in tweet_dict:
+        elif command == 'rt' and input_args[1] in tweet_dict:
             end_message = "id"
             input_data = 'rt ' + tweet_dict[input_args[1]]
-        elif input_args[0][1:] == 're' and input_args[1] in tweet_dict:
+        elif command == 're' and input_args[1] in tweet_dict:
             end_message = "id"
             input_data = 're ' + tweet_dict[input_args[1]] + input_data[6:]
-        elif input_args[0][1:] == 'th' and input_args[1] in tweet_dict:
+        elif command == 'th' and input_args[1] in tweet_dict:
             weechat.prnt(buffer, "%sThread of the following tweet id: %s" % (weechat.prefix("network"), input_args[1]))
             input_data = 'th ' + tweet_dict[input_args[1]] + input_data[6:]
             end_message = "End of thread"
-        elif input_args[0][1:] == 'new':
+        elif command == 'new':
             end_message = "id"
             if script_options['last_id'] != "":
                 input_data = 'new ' + script_options['last_id']
             else:
                 input_data = 'home'
-        elif input_args[0][1:] == 'auth':
+            if data != "silent":
+                #Delay the home timeline update so we don't go over the api req limits
+                home_counter += 1
+        elif command == 'home':
+            input_data = 'home'
+            #Delay the home timeline update so we don't go over the api req limits
+            home_counter += 1
+            end_message = "Done"
+        elif command == 'auth':
             if len(input_args) == 2:
                 oauth_dance(buffer,input_args[1])
             else:
                 oauth_dance(buffer)
-        elif input_args[0][1:] == 'f' or input_args[0][1:] == 'fo':
-            command = input_args[0][1:]
+        elif command == 'f' or command == 'fo':
             if len(input_args) == 3 and input_args[2] in tweet_dict:
                 input_data = command + " " + input_args[1] + " " + tweet_dict[input_args[2]]
             elif len(input_args) == 2:
@@ -373,20 +390,20 @@ def buffer_input_cb(data, buffer, input_data):
             else:
                 input_data = command + " " + script_options['screen_name']
             if command == 'f':
-                #L because we are returning a list later on
+                #L because we are returning a list to be printed later on
                 end_message = "LFollowing"
             else:
                 end_message = "LFollowers"
-        elif input_args[0][1:] == 'a':
+        elif command == 'a':
             input_data = input_data[1:]
             end_message = "About"
-        elif input_args[0][1:] == 'blocks':
+        elif command == 'blocks':
             input_data = input_data[1:]
             end_message = "LBlock list"
-        elif input_args[0][1:] == 'fav' and input_args[1] in tweet_dict:
+        elif command == 'fav' and input_args[1] in tweet_dict:
             input_data = 'fav ' + tweet_dict[input_args[1]]
             weechat.prnt(buffer, "%sYou fave'd the following tweet:" % weechat.prefix("network"))
-        elif input_args[0][1:] == 'unfav' and input_args[1] in tweet_dict:
+        elif command == 'unfav' and input_args[1] in tweet_dict:
             input_data = 'unfav ' + tweet_dict[input_args[1]]
             weechat.prnt(buffer, "%sYou unfave'd the following tweet:" % weechat.prefix("network"))
         else:
@@ -441,7 +458,13 @@ def close_cb():
 def timer_cb(data, remaining_calls):
     # ...
     #Get latest tweets from timeline
-    buffer_input_cb("silent", buffer, ":new")
+    global home_counter
+    # Max 15 request for home timeline per 15min
+    # If users req the home timeline delay the auto update
+    if home_counter == 0:
+        buffer_input_cb("silent", buffer, ":new")
+    else:
+        home_counter -= 1
 
     return weechat.WEECHAT_RC_OK
 
