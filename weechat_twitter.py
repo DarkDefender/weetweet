@@ -2,6 +2,8 @@ import sys
 import ast
 import re
 import os
+import time
+import calendar
 
 # TODO:
 # Blocking (More work on it)
@@ -54,7 +56,6 @@ tweet_dict = {'cur_index': "a0"}
 SCRIPT_NAME = "twitter"
 SCRIPT_FILE_PATH = os.path.abspath(__file__)
 
-add_last_id = False
 twit_buf = ""
 timer_hook = ""
 
@@ -120,7 +121,6 @@ def parse_for_nicks(text):
             add_to_nicklist(buffer,nick)
 
 def my_process_cb(data, command, rc, out, err):
-    global add_last_id
 
     if rc == weechat.WEECHAT_HOOK_PROCESS_ERROR:
         weechat.prnt("", "Error with command '%s'" %
@@ -129,7 +129,7 @@ def my_process_cb(data, command, rc, out, err):
 
     if out != "":
         buffer = twit_buf
-        if out[0] != "[":
+        if out[0] != "[" and out[0] != "{":
             weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"), out))
             return weechat.WEECHAT_RC_OK
         process_output = ast.literal_eval(out)
@@ -165,25 +165,23 @@ def my_process_cb(data, command, rc, out, err):
             return weechat.WEECHAT_RC_OK
 
         for message in process_output:
-            parse_for_nicks(message['text'])
-            nick = message['user']['screen_name']
+            parse_for_nicks(message[3])
+            nick = message[1]
             add_to_nicklist(buffer,nick)
 
             if script_options['print_id'] == 'on':
-                t_id = weechat.color('reset') + ' ' + dict_tweet(message['id_str'])
+                t_id = weechat.color('reset') + ' ' + dict_tweet(message[2])
             else:
                 t_id = ''
 
-            weechat.prnt_date_tags(buffer, 0, "notify_message",
-                    "%s%s\t%s" % (nick, t_id, message['text']))
-        if add_last_id == True:
-            add_last_id = False
+            weechat.prnt_date_tags(buffer, message[0], "notify_message",
+                    "%s%s\t%s" % (nick, t_id, message[3]))
+        if data == "id":
             try:
-                script_options['last_id'] = process_output[-1]['id_str']
+                script_options['last_id'] = process_output[-1][2]
             except:
                 pass
-
-        if data != "":
+        elif data != "":
             weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"), data))
     if err != "":
         weechat.prnt("", "stderr: %s" % err)
@@ -295,16 +293,18 @@ def get_twitter_data(cmd_args):
                     tweet_data = twitter.favorites.list()
             elif cmd_args[3] == "limits":
                 output = ""
-                if len(cmd_args) == 5:
-                    tweet_data = twitter.application.rate_limit_status(resources=cmd_args[4])
+                if len(cmd_args) >= 5:
+                    tweet_data = twitter.application.rate_limit_status(resources=",".join(cmd_args[4:]))
                 else:
                     tweet_data = twitter.application.rate_limit_status()
                 for res in tweet_data['resources']:
                     output += res + ":\n"
                     for sub_res in tweet_data['resources'][res]:
                         output += "  " + sub_res[len(res)+2:] + ":\n"
-                        for data in tweet_data['resources'][res][sub_res]:
-                            output += "    " + data + ": " + str(tweet_data['resources'][res][sub_res][data]) + "\n"
+                        output += "    " + 'reset' + ": " + time.strftime('%Y-%m-%d %H:%M:%S',
+                                time.localtime(tweet_data['resources'][res][sub_res]['reset'])) + "\n"
+                        output += "    " + 'limit' + ": " + str(tweet_data['resources'][res][sub_res]['limit']) + "\n"
+                        output += "    " + 'remaining' + ": " + str(tweet_data['resources'][res][sub_res]['remaining']) + "\n"
                 return output
             elif cmd_args[3] == "home":
                 tweet_data = twitter.statuses.home_timeline()
@@ -317,9 +317,10 @@ def get_twitter_data(cmd_args):
     # at once.
     output = []
     for message in tweet_data:
-        output.append({'user': {'screen_name': message['user']['screen_name']},
-            'text': h.unescape(message['text']),
-            'id_str': message['id_str']})
+        output.append([calendar.timegm(time.strptime(message['created_at'],'%a %b %d %H:%M:%S +0000 %Y')),
+            message['user']['screen_name'],
+            message['id_str'],
+            h.unescape(message['text'])])
 
     output.reverse()
 
@@ -328,7 +329,6 @@ def get_twitter_data(cmd_args):
 # callback for data received in input
 def buffer_input_cb(data, buffer, input_data):
     # ...
-    global add_last_id
     end_message = ""
 
     if input_data[0] == ':':
@@ -341,17 +341,17 @@ def buffer_input_cb(data, buffer, input_data):
         elif input_args[0][1:] == 'v' and input_args[1] in tweet_dict:
             input_data = 'v ' + tweet_dict[input_args[1]]
         elif input_args[0][1:] == 'rt' and input_args[1] in tweet_dict:
-            add_last_id = True
+            end_message = "id"
             input_data = 'rt ' + tweet_dict[input_args[1]]
         elif input_args[0][1:] == 're' and input_args[1] in tweet_dict:
-            add_last_id = True
+            end_message = "id"
             input_data = 're ' + tweet_dict[input_args[1]] + input_data[6:]
         elif input_args[0][1:] == 'th' and input_args[1] in tweet_dict:
             weechat.prnt(buffer, "%sThread of the following tweet id: %s" % (weechat.prefix("network"), input_args[1]))
             input_data = 'th ' + tweet_dict[input_args[1]] + input_data[6:]
             end_message = "End of thread"
         elif input_args[0][1:] == 'new':
-            add_last_id = True
+            end_message = "id"
             if script_options['last_id'] != "":
                 input_data = 'new ' + script_options['last_id']
             else:
@@ -393,7 +393,7 @@ def buffer_input_cb(data, buffer, input_data):
             input_data = input_data[1:]
             end_message = "Done"
     else:
-        add_last_id = True
+        end_message = "id"
         #esacpe special chars when printing to commandline
         input_data = 't ' + "'" + html_escape(input_data) + "'"
         #input_data = 't ' + "'" + html.escape(input_data) + "'"
