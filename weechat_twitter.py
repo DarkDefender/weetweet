@@ -7,7 +7,7 @@ import calendar
 
 # TODO:
 # Blocking (More work/testing on it)
-# Replace the thread call old api will be blocked soon
+# Replace the thread call, old api will be blocked soon
 # Show followers/friends (change api call because the current is problematic)
 
 # This twitter plugin can be extended even more. Just look at the twitter api
@@ -211,8 +211,10 @@ def my_process_cb(data, command, rc, out, err):
 def get_twitter_data(cmd_args):
     # Read the oauth token and auth with the twitter api.
     # Return the requested tweets
-
-    h = html.parser.HTMLParser()
+    try:
+        h = html.parser.HTMLParser()
+    except:
+        pass
     
     if len(cmd_args) < 3:
         return "Invalid command"
