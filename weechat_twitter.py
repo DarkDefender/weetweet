@@ -187,6 +187,8 @@ def my_process_cb(data, command, rc, out, err):
         if data == "id":
             try:
                 script_options['last_id'] = process_output[-1][2]
+                # Save last id
+                weechat.config_set_plugin("last_id",script_options["last_id"])
             except:
                 pass
         elif data != "":
@@ -369,6 +371,7 @@ def buffer_input_cb(data, buffer, input_data):
             if data != "silent":
                 #Delay the home timeline update so we don't go over the api req limits
                 home_counter += 1
+                end_message = "Done"
         elif command == 'home':
             input_data = 'home'
             #Delay the home timeline update so we don't go over the api req limits
@@ -444,15 +447,8 @@ def hook_commands_and_completions():
 # TODO rewrite this so it unloads the plugin
 def buffer_close_cb(data, buffer):
     # ...
-    # Save last id
-    weechat.config_set_plugin("last_id",script_options["last_id"])
-    
     #TODO handle multiple buffers and free up global buffer pointers
     weechat.unhook_all()
-    return weechat.WEECHAT_RC_OK
-
-def close_cb():
-    weechat.config_set_plugin("last_id",script_options["last_id"])
     return weechat.WEECHAT_RC_OK
 
 def timer_cb(data, remaining_calls):
