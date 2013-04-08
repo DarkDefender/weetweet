@@ -6,7 +6,6 @@ import time
 import calendar
 
 # TODO:
-# Blocking (More work/testing on it)
 # Replace the thread call, old api will be blocked soon
 # Show followers/friends (change api call because the current is problematic)
 
@@ -284,9 +283,11 @@ def get_twitter_data(cmd_args):
             elif cmd_args[3] == "new":
                 tweet_data = twitter.statuses.home_timeline(since_id = cmd_args[4], count=200) 
             elif cmd_args[3] == "follow":
-                tweet_data = twitter.friendships.create(screen_name = cmd_args[4]) 
+                tweet_data = []
+                twitter.friendships.create(screen_name = cmd_args[4]) 
             elif cmd_args[3] == "unfollow":
-                tweet_data = twitter.friendships.destroy(screen_name = cmd_args[4])
+                tweet_data = []
+                twitter.friendships.destroy(screen_name = cmd_args[4])
             elif cmd_args[0] == "settings":
                 #this only gets called from within weechat
                 return twitter.account.settings()
@@ -313,14 +314,16 @@ def get_twitter_data(cmd_args):
             elif cmd_args[3] == "a":
                 return twitter.users.show(screen_name = cmd_args[4])
             elif cmd_args[3] == "b":
-                tweet_data = twitter.blocks.create(screen_name = cmd_args[4]) 
+                tweet_data = []
+                twitter.blocks.create(screen_name = cmd_args[4]) 
             elif cmd_args[3] == "ub":
-                tweet_data = twitter.blocks.destroy(screen_name = cmd_args[4]) 
+                tweet_data = []
+                twitter.blocks.destroy(screen_name = cmd_args[4]) 
             elif cmd_args[3] == "blocks":
                 tweet_data = twitter.blocks.list(skip_status = True) 
                 block_list = list()
                 for user in tweet_data['users']:
-                    block_list.append(users['screen_name'])
+                    block_list.append(user['screen_name'])
                 return block_list
             elif cmd_args[3] == "fav":
                 tweet_data = [twitter.favorites.create(id=cmd_args[4])]
