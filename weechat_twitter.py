@@ -6,6 +6,7 @@ import time
 import calendar
 
 # TODO:
+# Add desc for script options
 # Replace the thread call, old api will be blocked soon
 # Show followers/friends (change api call because the current is limited)
 
@@ -454,9 +455,8 @@ def get_twitter_data(cmd_args):
     output = []
     for message in tweet_data:
         if alt_rt_style and "retweeted_status" in message:
-            message['retweeted_status']['text'] += " (retweeted by " + message['user']['screen_name'] + ")"
-            message['retweeted_status']['created_at'] = message['created_at']
-            message = message['retweeted_status']
+            message['text'] = message['retweeted_status']['text'] + " (retweeted by " + message['user']['screen_name'] + ")"
+            message['user'] = message['retweeted_status']['user']
         output.append([calendar.timegm(time.strptime(message['created_at'],'%a %b %d %H:%M:%S +0000 %Y')),
             message['user']['screen_name'],
             message['id_str'],
