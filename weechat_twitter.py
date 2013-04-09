@@ -273,7 +273,7 @@ def get_twitter_data(cmd_args):
     oauth_token = cmd_args[1]
     oauth_secret= cmd_args[2]
     try:
-        if cmd_args[3] == 'th':
+        if len(cmd_args) == 4 and cmd_args[3] == 'th':
             # use the old api to get the thread from a tweet
             # NOTE This is unoffical and might stop working at any moment
             twitter = Twitter(
@@ -294,7 +294,10 @@ def get_twitter_data(cmd_args):
             twitter = Twitter(auth=OAuth(
             oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET))
     
-            if cmd_args[3] == "u":
+            if cmd_args[0] == "settings":
+                #this only gets called from within weechat
+                return twitter.account.settings()
+            elif cmd_args[3] == "u":
                 kwargs = dict(count=20, screen_name=cmd_args[4])
                 if len(cmd_args) == 7:
                     kwargs['count'] = int(cmd_args[6])
@@ -340,9 +343,6 @@ def get_twitter_data(cmd_args):
             elif cmd_args[3] == "unfollow":
                 tweet_data = []
                 twitter.friendships.destroy(screen_name = cmd_args[4])
-            elif cmd_args[0] == "settings":
-                #this only gets called from within weechat
-                return twitter.account.settings()
             elif cmd_args[3] == "f" or cmd_args[3] == "fo":
                 if len(cmd_args) == 6:
                     kwargs = dict(screen_name = cmd_args[4], skip_status = True, cursor = int(cmd_args[5]))
@@ -526,6 +526,7 @@ def buffer_input_cb(data, buffer, input_data):
                 oauth_dance(buffer,input_args[1])
             else:
                 oauth_dance(buffer)
+            return weechat.WEECHAT_RC_OK
         elif command == 'f' or command == 'fo':
             #L because we are returning a list to be printed later on
             end_message = "L"
@@ -686,8 +687,6 @@ def my_modifier_cb(data, modifier, modifier_data, string):
 def oauth_dance(buffer, pin = ""):
     #Auth the twitter client
 
-    #Load to be able to open links in webbrowser
-    import webbrowser
     global script_options
 
     if pin == "":
@@ -704,18 +703,7 @@ def oauth_dance(buffer, pin = ""):
     """)
         oauth_url = ('http://api.twitter.com/oauth/authorize?oauth_token=' +
                      oauth_token)
-        weechat.prnt(buffer,"Opening: %s" % oauth_url)
-    
-        try:
-            r = webbrowser.open(oauth_url)
-            if not r:
-                raise Exception()
-        except:
-            weechat.prnt(buffer,"""
-    Uh, I couldn't open a browser on your computer. Please go here to get
-    your PIN:
-    
-    """ + oauth_url)
+        weechat.prnt(buffer," Please go here to get your PIN: " + oauth_url)
 
         script_options['oauth_token'] = oauth_token
         script_options['oauth_secret'] = oauth_token_secret
