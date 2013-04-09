@@ -1,8 +1,8 @@
 weechat_twitter
 ===============
 
-A twitter plugin for weechat written in python.
+A twitter script for weechat written in python.
 
-You'll need the python twitter lib to run this plugin, and probably weechat >= 4.0.
+You'll need the python twitter lib to run this script, and probably weechat >= 0.4.0.
 
 Python lib website: http://mike.verdone.ca/twitter/
