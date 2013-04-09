@@ -458,7 +458,7 @@ def buffer_input_cb(data, buffer, input_data):
         input_args = input_data.split()
         command = input_args[0][1:]
         if command in command_dict:
-            input_data.replace(command,command_dict[command])
+            input_data = input_data.replace(command,command_dict[command],1)
             command = command_dict[command]
         if command == 'd' and input_args[1] in tweet_dict:
             input_data = 'd ' + tweet_dict[input_args[1]]
