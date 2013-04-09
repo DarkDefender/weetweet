@@ -6,6 +6,7 @@ import time
 import calendar
 
 # TODO:
+# Include replies in home timeline if users wants to
 # Replace the thread call, old api will be blocked soon
 # Show followers/friends (change api call because the current is limited)
 
@@ -25,7 +26,11 @@ try:
     import weechat
 except:
     #import html parser so we can convert html strings to plain text
-    import html.parser
+    try:
+        import html.parser
+    except:
+        print("You need to have python3 installed to run this script!")
+        exit(0)
     weechat_call = False
 
 try:
