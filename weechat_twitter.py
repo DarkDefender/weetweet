@@ -6,7 +6,6 @@ import time
 import calendar
 
 # TODO:
-# Include replies in home timeline if users wants to
 # Replace the thread call, old api will be blocked soon
 # Show followers/friends (change api call because the current is limited)
 
@@ -53,6 +52,8 @@ script_options = {
     "screen_name" : "",
     "last_id" : "",
     "print_id" : "on",
+    "alt_rt_style" : "",
+    "home_replies" : "",
 }
 
 tweet_dict = {'cur_index': "a0"}
@@ -265,6 +266,9 @@ def my_process_cb(data, command, rc, out, err):
 def get_twitter_data(cmd_args):
     # Read the oauth token and auth with the twitter api.
     # Return the requested tweets
+    no_home_replies = True
+    alt_rt_style = False
+
     try:
         #This can get called from within weechat so catch
         #the import error
@@ -272,6 +276,17 @@ def get_twitter_data(cmd_args):
     except:
         pass
     
+    try:
+        if cmd_args[-1][0] == "[":
+            option_list = ast.literal_eval(cmd_args[-1])
+            cmd_args.pop(-1)
+            if "home_replies" in option_list:
+                no_home_replies = False
+            if "alt_rt_style" in option_list:
+                alt_rt_style = True
+    except:
+        pass
+
     if len(cmd_args) < 3:
         return "Invalid command"
 
@@ -336,12 +351,12 @@ def get_twitter_data(cmd_args):
             elif cmd_args[3] == "t":
                 #returns the tweet that was sent (not a list(dict) just a dict)
                 #make it into a list so we don't have to write special cases for this
-                tweet_data = [twitter.statuses.update(status=h.unescape(" ".join(cmd_args[4:])))]
+                tweet_data = [twitter.statuses.update(status=h.unescape(cmd_args[4]))]
             elif cmd_args[3] == "re":
-                tweet_data = [twitter.statuses.update(status=h.unescape(" ".join(cmd_args[5:])),
+                tweet_data = [twitter.statuses.update(status=h.unescape(cmd_args[5]),
                     in_reply_to_status_id=cmd_args[4])]
             elif cmd_args[3] == "new":
-                tweet_data = twitter.statuses.home_timeline(since_id = cmd_args[4], count=200) 
+                tweet_data = twitter.statuses.home_timeline(since_id = cmd_args[4], count=200, exclude_replies = no_home_replies) 
             elif cmd_args[3] == "follow":
                 tweet_data = []
                 twitter.friendships.create(screen_name = cmd_args[4]) 
@@ -420,15 +435,15 @@ def get_twitter_data(cmd_args):
                 return output
             elif cmd_args[3] == "home":
                 if len(cmd_args) == 6:
-                    kwargs = dict(count=int(cmd_args[5]), max_id=cmd_args[4])
+                    kwargs = dict(count=int(cmd_args[5]), max_id=cmd_args[4], exclude_replies = no_home_replies)
                     tweet_data = twitter.statuses.home_timeline(**kwargs)
                 elif len(cmd_args) == 5:
                     if int(cmd_args[4]) <= 200:
-                        tweet_data = twitter.statuses.home_timeline(count=int(cmd_args[4]))
+                        tweet_data = twitter.statuses.home_timeline(count=int(cmd_args[4], exclude_replies = no_home_replies))
                     else:
-                        tweet_data = twitter.statuses.home_timeline(max_id=cmd_args[4])
+                        tweet_data = twitter.statuses.home_timeline(max_id=cmd_args[4], exclude_replies = no_home_replies)
                 else:
-                    tweet_data = twitter.statuses.home_timeline()
+                    tweet_data = twitter.statuses.home_timeline(exclude_replies = no_home_replies)
             else:
                 return "Invalid command: " + cmd_args[3]
     except:
@@ -438,6 +453,9 @@ def get_twitter_data(cmd_args):
     # at once.
     output = []
     for message in tweet_data:
+        if alt_rt_style and "retweeted_status" in message:
+            message['retweeted_status']['text'] += " (retweeted by " + message['user']['screen_name'] + ")"
+            message = message['retweeted_status']
         output.append([calendar.timegm(time.strptime(message['created_at'],'%a %b %d %H:%M:%S +0000 %Y')),
             message['user']['screen_name'],
             message['id_str'],
@@ -452,6 +470,11 @@ def buffer_input_cb(data, buffer, input_data):
     # ...
     global home_counter
     end_message = ""
+    options = []
+    if script_options['alt_rt_style'] == "True":
+        options.append("alt_rt_style")
+    if script_options['home_replies'] == "True":
+        options.append("home_replies")
 
     if input_data[0] == ':':
         if data != "silent":
@@ -586,7 +609,7 @@ def buffer_input_cb(data, buffer, input_data):
 
     weechat.hook_process("python3 " + SCRIPT_FILE_PATH + " " +
                 script_options["oauth_token"] + " " + script_options["oauth_secret"] + " " +
-                input_data, 10 * 1000, "my_process_cb", end_message)
+                input_data + " " + '"' + str(options) + '"', 10 * 1000, "my_process_cb", end_message)
     return weechat.WEECHAT_RC_OK
 
 def my_command_cb(data, buffer, args):
