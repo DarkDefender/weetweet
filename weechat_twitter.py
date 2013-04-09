@@ -237,6 +237,7 @@ def my_process_cb(data, command, rc, out, err):
         for message in process_output:
             parse_for_nicks(message[3])
             nick = message[1]
+            reply_id = ""
             add_to_nicklist(buffer,nick,tweet_nicks_group)
 
             if script_options['print_id'] == 'on':
@@ -244,18 +245,23 @@ def my_process_cb(data, command, rc, out, err):
             else:
                 t_id = ''
 
+            if len(message) == 5:
+                #This is a reply to a tweet
+                reply_id = "(in reply to <id>)"
+
             mes_date = time.strftime("%Y-%m-%d", time.gmtime(message[0]))
             if cur_date != mes_date:
                 cur_date = mes_date
                 weechat.prnt(buffer, "\t\tDate: " + cur_date)
 
             weechat.prnt_date_tags(buffer, message[0], "notify_message",
-                    "%s%s\t%s" % (nick, t_id, message[3]))
+                    "%s%s\t%s%s" % (nick, t_id, message[3],reply_id))
         if data == "id":
             try:
-                script_options['last_id'] = process_output[-1][2]
-                # Save last id
-                weechat.config_set_plugin("last_id",script_options["last_id"])
+                if script_options['last_id'] < process_output[-1][2]:
+                    script_options['last_id'] = process_output[-1][2]
+                    # Save last id
+                    weechat.config_set_plugin("last_id",script_options["last_id"])
             except:
                 pass
         elif data != "":
@@ -269,6 +275,7 @@ def get_twitter_data(cmd_args):
     # Return the requested tweets
     no_home_replies = True
     alt_rt_style = False
+    screen_name = ""
 
     try:
         #This can get called from within weechat so catch
@@ -285,6 +292,7 @@ def get_twitter_data(cmd_args):
                 no_home_replies = False
             if "alt_rt_style" in option_list:
                 alt_rt_style = True
+            screen_name = option_list[0]
     except:
         pass
 
@@ -440,7 +448,7 @@ def get_twitter_data(cmd_args):
                     tweet_data = twitter.statuses.home_timeline(**kwargs)
                 elif len(cmd_args) == 5:
                     if int(cmd_args[4]) <= 200:
-                        tweet_data = twitter.statuses.home_timeline(count=int(cmd_args[4], exclude_replies = no_home_replies))
+                        tweet_data = twitter.statuses.home_timeline(count=int(cmd_args[4]), exclude_replies = no_home_replies)
                     else:
                         tweet_data = twitter.statuses.home_timeline(max_id=cmd_args[4], exclude_replies = no_home_replies)
                 else:
@@ -455,6 +463,8 @@ def get_twitter_data(cmd_args):
     output = []
     for message in tweet_data:
         if alt_rt_style and "retweeted_status" in message:
+            if message['user']['screen_name'] == screen_name:
+                message['user']['screen_name'] = "<you>"
             message['text'] = message['retweeted_status']['text'] + " (retweeted by " + message['user']['screen_name'] + ")"
             message['user'] = message['retweeted_status']['user']
         output.append([calendar.timegm(time.strptime(message['created_at'],'%a %b %d %H:%M:%S +0000 %Y')),
@@ -471,7 +481,7 @@ def buffer_input_cb(data, buffer, input_data):
     # ...
     global home_counter
     end_message = ""
-    options = []
+    options = [script_options['screen_name']]
     if script_options['alt_rt_style'] == "True":
         options.append("alt_rt_style")
     if script_options['home_replies'] == "True":
