@@ -7,7 +7,7 @@ import calendar
 
 # TODO:
 # Replace the thread call, old api will be blocked soon
-# Show followers/friends (change api call because the current is problematic)
+# Show followers/friends (change api call because the current is limited)
 
 # This twitter plugin can be extended even more. Just look at the twitter api
 # doc here: https://dev.twitter.com/docs/api/1.1
@@ -51,6 +51,60 @@ script_options = {
 }
 
 tweet_dict = {'cur_index': "a0"}
+#Mega command dict
+command_dict = dict(thread="th",user="u",replies="r",view_tweet="v",
+        retweet="rt",delete="d",tweet="t",reply="re",new_tweets="new",
+        follow_user="follow",unfollow_user="unfollow",following="f",
+        followers="fo",about="a",block="b",unblock="ub",
+        blocked_users="blocks",favorite="fav",unfavorite="unfav",
+        favorites="favs", rate_limits="limits",home_timeline="home",
+        clear_nicks="cnicks")
+desc_dict = dict(thread="<id>, Shows the conversation of the tweet",
+        user="<user>[<id><count>|<id>|<count>], Request user timeline, " +
+        "if <id> is given it will get tweets older than <id>, " +
+        "<count> is how many tweets to get, valid number is 1-200",
+        replies="[<id><count>|<id>|<count>],Get any replies/mentions of you " +
+        "if <id> is given it will get tweets older than <id>, " +
+        "<count> is how many tweets to get, valid number is 1-200",
+        view_tweet="<id>, View/get tweet with <id>",
+        retweet="<id>, Retweet <id>",
+        delete="<id>, Delete tweet <id>. You can only delete your own tweets...",
+        tweet="<text>Tweet the text following this command",
+        reply="<id><text>, reply to <id>. You need to have @<username> " +
+        "of the user that you reply to in the tweet text. If this is not " +
+        "the case this will be treated like a normal tweet instead.",
+        new_tweets="Get new tweets from your home_timeline. This is only " +
+        "useful if you have disabled the auto updater",
+        follow_user="<user>, Add user to people you follow",
+        unfollow_user="<user>, Remove user for people you follow",
+        following="[|<id>|<user>|<user><id>], Show 'friends' of <user> or " +
+        "if no user were given show the people you follow. If not all " +
+        "followers were printed supply the <id> of the last list to get " +
+        "the new batch of nicks",
+        followers="[|<id>|<user>|<user><id>], Who followes <user> or " +
+        "if no user were given show your follower. If not all " +
+        "followers were printed supply the <id> of the last list to get " +
+        "the new batch of nicks",
+        about="<user>, Print info about <user>",
+        block="<user>, Block <user>",
+        unblock="<user>, Unblock <user>",
+        blocked_users="Print a list of users you have currently blocked",
+        favorite="<id>, Add tweet <id> to you favorites",
+        unfavorite="<id>, Remove tweet <id> from yout favorites",
+        favorites="[|<user>][<id><count>|<id>|<count>], Request <user> favs, " +
+        "if <user> is not given get your own favs. " +
+        "If <id> is given it will get tweets older than <id>, " +
+        "<count> is how many tweets to get, valid number is 1-200",
+        rate_limits="[|<sub_group>], get the current status of the twitter " +
+        "api limits. It prints how much you have left/used. " +
+        " if <sub_group> is supplied it will only get/print that sub_group.",
+        home_timeline="[<id><count>|<id>|<count>],Get tweets from you home " +
+        "timeline" +
+        "if <id> is given it will get tweets older than <id>, " +
+        "<count> is how many tweets to get, valid number is 1-200",
+        clear_nicks="Clear nicks from the 'Tweet_parse' nick group. "+
+        "These nicks are parsed from recived tweets, it can get " +
+        "messy at times...")
 
 SCRIPT_NAME = "twitter"
 SCRIPT_FILE_PATH = os.path.abspath(__file__)
@@ -145,7 +199,7 @@ def my_process_cb(data, command, rc, out, err):
             return weechat.WEECHAT_RC_OK
         process_output = ast.literal_eval(out)
         #List message
-        # TODO blocks returns more then 60
+        # TODO :blocks returns more then 60
         if len(data) >= 1 and data[0] == "L":
             if len(process_output) > 60:
                 t_id = dict_tweet(str(process_output[60])) + "\t"
@@ -211,6 +265,8 @@ def get_twitter_data(cmd_args):
     # Read the oauth token and auth with the twitter api.
     # Return the requested tweets
     try:
+        #This can get called from within weechat so catch
+        #the import error
         h = html.parser.HTMLParser()
     except:
         pass
@@ -401,6 +457,9 @@ def buffer_input_cb(data, buffer, input_data):
             weechat.prnt_date_tags(buffer, 0, "no_highlight", input_data)
         input_args = input_data.split()
         command = input_args[0][1:]
+        if command in command_dict:
+            input_data.replace(command,command_dict[command])
+            command = command_dict[command]
         if command == 'd' and input_args[1] in tweet_dict:
             input_data = 'd ' + tweet_dict[input_args[1]]
             weechat.prnt(buffer, "%sYou deleted the following tweet:" % weechat.prefix("network"))
@@ -525,17 +584,34 @@ def my_command_cb(data, buffer, args):
 
     return weechat.WEECHAT_RC_OK
 
-# TODO write help text
 def hook_commands_and_completions():
-    weechat.hook_command("twitter", "Command to interact with with twitter plugin",
-        "[list] | [enable|disable|toggle [name]] | [add name plugin.buffer tags regex] | [del name|-all]",
-        "description of arguments...",
-        "list"
-        " || enable %(filters_names)"
-        " || disable %(filters_names)"
-        " || toggle %(filters_names)"
-        " || add %(filters_names) %(buffers_plugins_names)|*"
-        " || del %(filters_names)|-all",
+    compl_list = []
+    com_list = []
+    desc_list = []
+    for command in sorted(command_dict):
+        compl_list.append(command)
+        com_list.append(command + weechat.color("*red") + " or " +
+                weechat.color('reset') + command_dict[command] + "\n")
+        desc_list.append(weechat.color("chat_nick_other") + command + ":    \n" + desc_dict[command])
+    weechat.hook_command("twitter", "Command to interact with the twitter api/plugin",
+        " | ".join(com_list),
+        "You can type all of these command in the twitter buffer if you add a ':' before the command, IE:\n"
+        ":limits\n\n"
+        "If you don't type a command in the twitter buffer you will tweet that instead,\n"
+        "text after 140 chars will turn red to let you know were twitter will cut off your tweet.\n\n"
+        + weechat.color("*red") + "NOTE:\n"
+        "There are limits on how many twitter api calls you can do, some calls are _quite_ restricted.\n"
+        "So if you get HTML errors from the twitter lib you probably exceeded the limit\n"
+        "you can check out your limits with the rate_limits/limits command.\n"
+        "_Most_ commands in this plugin only uses one call. If you want to check old tweets\n"
+        "in your home timeline it's better to request many tweets in one go.\n"
+        "That way you don't have to request new tweets as often to go further back in the timeline.\n"
+        "And thus you are less likely to hit the limit of requests you can do in the 15 min time window.\n"
+        "\nYou can write newlines in your tweet with html newline '&#13;&#10;' (you can autocomplete it)\n"
+        "\nThe 'number' next to the nicks in the chat window is the <id> of the tweet it's used\n"
+        "in the some of the twitter plugin commands.\n\n"
+        "Command desc:\n"+ "\n".join(desc_list),
+        " || ".join(compl_list),
         "my_command_cb", "")
 
 # callback called when buffer is closed
@@ -683,8 +759,9 @@ def finish_init():
     #Get latest tweets from timeline
     buffer_input_cb("silent", buffer, ":new")
     home_counter += 1
-    # timer called each minute when second is 00
-    timer_hook = weechat.hook_timer(60 * 1000, 60, 0, "timer_cb", "")
+    # timer called each nearly each minute. 
+    # Add drift so we are sure not to collide with the api limit window before it resets
+    timer_hook = weechat.hook_timer(63 * 1000, 0, 0, "timer_cb", "")
 
 if __name__ == "__main__" and weechat_call:
     weechat.register( SCRIPT_NAME , "DarkDefender", "1.0", "GPL3", "Weechat twitter client", "", "")
