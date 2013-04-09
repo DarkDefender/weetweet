@@ -235,9 +235,10 @@ def my_process_cb(data, command, rc, out, err):
         cur_date = time.strftime("%Y-%m-%d", time.gmtime())
 
         for message in process_output:
-            parse_for_nicks(message[3])
             nick = message[1]
+            text = message[3]
             reply_id = ""
+            parse_for_nicks(text)
             add_to_nicklist(buffer,nick,tweet_nicks_group)
 
             if script_options['print_id'] == 'on':
@@ -247,7 +248,12 @@ def my_process_cb(data, command, rc, out, err):
 
             if len(message) == 5:
                 #This is a reply to a tweet
-                reply_id = "(in reply to <id>)"
+                arrow_col = weechat.color('chat_prefix_suffix')
+                reset_col = weechat.color('reset')
+                reply_id = arrow_col +  "<" + reset_col + dict_tweet(message[4]) + arrow_col + "> " + reset_col
+                temp_text = text
+                text = reply_id
+                reply_id = temp_text
 
             mes_date = time.strftime("%Y-%m-%d", time.gmtime(message[0]))
             if cur_date != mes_date:
@@ -255,7 +261,7 @@ def my_process_cb(data, command, rc, out, err):
                 weechat.prnt(buffer, "\t\tDate: " + cur_date)
 
             weechat.prnt_date_tags(buffer, message[0], "notify_message",
-                    "%s%s\t%s%s" % (nick, t_id, message[3],reply_id))
+                    "%s%s\t%s%s" % (nick, t_id, text,reply_id))
         if data == "id":
             try:
                 if script_options['last_id'] < process_output[-1][2]:
@@ -302,7 +308,7 @@ def get_twitter_data(cmd_args):
     oauth_token = cmd_args[1]
     oauth_secret= cmd_args[2]
     try:
-        if len(cmd_args) == 4 and cmd_args[3] == 'th':
+        if len(cmd_args) == 5 and cmd_args[3] == 'th':
             # use the old api to get the thread from a tweet
             # NOTE This is unoffical and might stop working at any moment
             twitter = Twitter(
@@ -467,10 +473,14 @@ def get_twitter_data(cmd_args):
                 message['user']['screen_name'] = "<you>"
             message['text'] = message['retweeted_status']['text'] + " (retweeted by " + message['user']['screen_name'] + ")"
             message['user'] = message['retweeted_status']['user']
-        output.append([calendar.timegm(time.strptime(message['created_at'],'%a %b %d %H:%M:%S +0000 %Y')),
+        mes_list =[calendar.timegm(time.strptime(message['created_at'],'%a %b %d %H:%M:%S +0000 %Y')),
             message['user']['screen_name'],
             message['id_str'],
-            h.unescape(message['text'])])
+            h.unescape(message['text'])]
+        if message["in_reply_to_status_id_str"] != None:
+            mes_list.append(message["in_reply_to_status_id_str"]) 
+
+        output.append(mes_list)
 
     output.reverse()
 
