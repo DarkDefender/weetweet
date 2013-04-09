@@ -470,6 +470,7 @@ def get_twitter_data(cmd_args):
     for message in tweet_data:
         if alt_rt_style and "retweeted_status" in message:
             if message['user']['screen_name'] == screen_name:
+                #escape highlighting
                 message['user']['screen_name'] = "<you>"
             message['text'] = message['retweeted_status']['text'] + " (retweeted by " + message['user']['screen_name'] + ")"
             message['user'] = message['retweeted_status']['user']
@@ -510,6 +511,7 @@ def buffer_input_cb(data, buffer, input_data):
             weechat.prnt(buffer, "%sYou deleted the following tweet:" % weechat.prefix("network"))
         elif command == 'v' and input_args[1] in tweet_dict:
             input_data = 'v ' + tweet_dict[input_args[1]]
+            end_message = "Done"
         elif command == 'rt' and input_args[1] in tweet_dict:
             end_message = "id"
             input_data = 'rt ' + tweet_dict[input_args[1]]
