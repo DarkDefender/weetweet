@@ -455,6 +455,7 @@ def get_twitter_data(cmd_args):
     for message in tweet_data:
         if alt_rt_style and "retweeted_status" in message:
             message['retweeted_status']['text'] += " (retweeted by " + message['user']['screen_name'] + ")"
+            message['retweeted_status']['created_at'] = message['created_at']
             message = message['retweeted_status']
         output.append([calendar.timegm(time.strptime(message['created_at'],'%a %b %d %H:%M:%S +0000 %Y')),
             message['user']['screen_name'],
