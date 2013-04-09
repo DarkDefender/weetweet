@@ -168,13 +168,6 @@ def remove_from_nicklist(buf, nick):
     weechat.nicklist_remove_nick(buf, nick_ptr)
 
 def parse_for_nicks(text):
-    global tweet_nicks_group 
-    
-    if tweet_nicks_group == "":
-        tweet_nicks_group = weechat.nicklist_add_group(twit_buf,
-                    "", "Tweet_parse",
-                    "weechat.color.nicklist_group", 1)
-    
     #Parse text for twitter nicks and add them to nicklist
     regex = re.compile(r'@([A-Za-z0-9_]+)')
     reset = weechat.color('reset')
@@ -210,7 +203,10 @@ def my_process_cb(data, command, rc, out, err):
                 end_mes = ""
 
             for nick in process_output:
-                add_to_nicklist(buffer,nick)
+                if data == "LYFollowing":
+                    add_to_nicklist(buffer,nick)
+                else:
+                    add_to_nicklist(buffer,nick,tweet_nicks_group)
             weechat.prnt_date_tags(buffer, 0, "no_highlight",
                     "%s%s: %s%s" % (t_id, data[1:], process_output, end_mes))
             return weechat.WEECHAT_RC_OK
@@ -531,20 +527,24 @@ def buffer_input_cb(data, buffer, input_data):
             else:
                 oauth_dance(buffer)
         elif command == 'f' or command == 'fo':
+            #L because we are returning a list to be printed later on
+            end_message = "L"
             if len(input_args) == 3 and input_args[2] in tweet_dict:
                 input_data = command + " " + input_args[1] + " " + tweet_dict[input_args[2]]
             elif len(input_args) == 2:
                 if input_args[1] in tweet_dict:
                     input_data = command + " " + script_options['screen_name'] + " " + tweet_dict[input_args[1]]
+                    #Your list, not any other users
+                    end_message += "Y"
                 else:
                     input_data = input_data[1:]
             else:
                 input_data = command + " " + script_options['screen_name']
+                end_message += "Y"
             if command == 'f':
-                #L because we are returning a list to be printed later on
-                end_message = "LFollowing"
+                end_message += "Following"
             else:
-                end_message = "LFollowers"
+                end_message += "Followers"
         elif command == 'a':
             input_data = input_data[1:]
             end_message = "About"
@@ -562,6 +562,12 @@ def buffer_input_cb(data, buffer, input_data):
             if tweet_nicks_group != "":
                 weechat.nicklist_remove_group(buffer, tweet_nicks_group)
                 tweet_nicks_group = ""
+            tweet_nicks_group = weechat.nicklist_add_group(twit_buf, "", "Tweet_parse",
+                    "weechat.color.nicklist_group", 1)
+            return weechat.WEECHAT_RC_OK
+        elif command == 'help':
+            weechat.command(buffer,"/help twitter")
+            weechat.prnt(buffer, "Exec command /help twitter, check your root buffer")
             return weechat.WEECHAT_RC_OK
         else:
             input_data = input_data[1:]
@@ -796,13 +802,15 @@ if __name__ == "__main__" and weechat_call:
         friends_nicks_group = weechat.nicklist_add_group(twit_buf, "", "Friends",
                     "weechat.color.nicklist_group", 1)
 
-        #show nicklist
-        weechat.buffer_set(twit_buf, "nicklist", "1")
-
+        tweet_nicks_group = weechat.nicklist_add_group(twit_buf, "", "Tweet_parse",
+                    "weechat.color.nicklist_group", 1)
         autocomp_group = weechat.nicklist_add_group(twit_buf, "", "Autocomp",
                     "weechat.color.nicklist_group", 1)
         #newline autocomplete
         weechat.nicklist_add_nick(twit_buf, autocomp_group, "&#13;&#10;", 'bar_fg', '', '', 1)
+
+        #show nicklist
+        weechat.buffer_set(twit_buf, "nicklist", "1")
 
         #Hook text input so we can update the bar item
         weechat.hook_modifier("input_text_display", "my_modifier_cb", "")
