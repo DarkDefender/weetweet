@@ -49,12 +49,12 @@ CONSUMER_KEY = 'NVkYe8DAeaw6YRcjw662ZQ'
 script_options = {
     "oauth_token" : "",
     "oauth_secret" : "",
-    "verified" : "",
+    "auth_complete" : False,
     "screen_name" : "",
     "last_id" : "",
-    "print_id" : "on",
-    "alt_rt_style" : "",
-    "home_replies" : "",
+    "print_id" : True,
+    "alt_rt_style" : False,
+    "home_replies" : False,
 }
 
 tweet_dict = {'cur_index': "a0"}
@@ -155,6 +155,9 @@ def dict_tweet(tweet_id):
 def read_config():
     for item in script_options:
         script_options[item] = weechat.config_string(weechat.config_get("plugins.var.python."+SCRIPT_NAME+"." + item))
+    for item in ["auth_complete","print_id","alt_rt_style","home_replies"]:
+        #Convert to bool
+        script_options[item] = weechat.config_string_to_boolean(script_options[item])
 
 def config_cb(data, option, value):
     """Callback called when a script option is changed."""
@@ -169,9 +172,11 @@ def add_to_nicklist(buf, nick, group=""):
         group = friends_nicks_group
     weechat.nicklist_add_nick(buf, group, nick, 'bar_fg', '', '', 1)
 
-def remove_from_nicklist(buf, nick):
+def remove_from_nicklist(buf, nick, group=""):
     """Remove nick from the nicklist."""
-    nick_ptr = weechat.nicklist_search_nick(buf, "", nick)
+    if group == "":
+        group = friends_nicks_group
+    nick_ptr = weechat.nicklist_search_nick(buf, group, nick)
     weechat.nicklist_remove_nick(buf, nick_ptr)
 
 def parse_for_nicks(text):
@@ -241,7 +246,7 @@ def my_process_cb(data, command, rc, out, err):
             parse_for_nicks(text)
             add_to_nicklist(buffer,nick,tweet_nicks_group)
 
-            if script_options['print_id'] == 'on':
+            if script_options['print_id']:
                 t_id = weechat.color('reset') + ' ' + dict_tweet(message[2])
             else:
                 t_id = ''
@@ -462,7 +467,7 @@ def get_twitter_data(cmd_args):
             else:
                 return "Invalid command: " + cmd_args[3]
     except:
-        return "Unexpected error in get_twitter_data:%s\n Call: %s" % (sys.exc_info()[0], cmd_args[3]) 
+        return "Unexpected error in get_twitter_data:%s\n Call: %s" % (sys.exc_info(), cmd_args[3]) 
     # Because of the huge amount of data, we need to cut down on most of it because we only really want
     # a small subset of it. This also prevents the output buffer from overflowing when fetching many tweets
     # at once.
@@ -493,9 +498,9 @@ def buffer_input_cb(data, buffer, input_data):
     global home_counter
     end_message = ""
     options = [script_options['screen_name']]
-    if script_options['alt_rt_style'] == "True":
+    if script_options['alt_rt_style']:
         options.append("alt_rt_style")
-    if script_options['home_replies'] == "True":
+    if script_options['home_replies']:
         options.append("home_replies")
 
     if input_data[0] == ':':
@@ -770,7 +775,7 @@ def oauth_dance(buffer, pin = ""):
         
         weechat.config_set_plugin('oauth_token', oauth_token)
         weechat.config_set_plugin('oauth_secret', oauth_token_secret)
-        weechat.config_set_plugin('verified', 'yes')
+        weechat.config_set_plugin('auth_complete', True)
         finish_init()
 
 def parse_oauth_tokens(result):
@@ -821,6 +826,11 @@ if __name__ == "__main__" and weechat_call:
 
         for option, default_value in script_options.items():
             if not weechat.config_is_set_plugin(option):
+                if isinstance(default_value,bool):
+                    if default_value:
+                        default_value = "on"
+                    else:
+                        default_value = "off"
                 weechat.config_set_plugin(option, default_value) 
 
         read_config()
@@ -854,7 +864,7 @@ if __name__ == "__main__" and weechat_call:
         #Hook text input so we can update the bar item
         weechat.hook_modifier("input_text_display", "my_modifier_cb", "")
 
-        if script_options['verified'] == 'yes':
+        if script_options['auth_complete']:
             finish_init()
         else:
             weechat.prnt(twit_buf,"""You have to register this plugin with twitter for it to work.
