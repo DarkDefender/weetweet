@@ -9,8 +9,6 @@ import socket
 
 # TODO:
 # "xt" willing to test when stream are in
-# hook_url, and hook socket
-# open new windows for streams
 # Add desc for script options
 # Replace the thread call, old api will be blocked soon
 # Show followers/friends (change api call because the current is limited)
@@ -333,13 +331,24 @@ def twitter_stream(cmd_args):
         stream = TwitterStream(auth=OAuth(
                 oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET))
 
-        if len(args) == 2:
+        twitter = Twitter(auth=OAuth(
+            oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET))
+
+        if args[0] != "":
             follow = ",".join(h.unescape(args[0]).split())
-            track = ",".join(h.unescape(args[0]).split())
+            twitter_data = twitter.users.lookup(screen_name=follow)
+            follow_ids = ""
+            for user in twitter_data:
+                follow_ids += user['id_str'] + ","
+            follow_ids = follow_ids[:-1]
+            if len(args) == 2 and args[1] != "":
+                track = ",".join(h.unescape(args[1]).split())
+                tweet_iter = stream.statuses.filter(track=track,follow=follow_ids)
+            else:
+                tweet_iter = stream.statuses.filter(follow=follow_ids)
         else:
-            follow = ",".join(h.unescape(args[0]).split())
-            track = ""
-        tweet_iter = stream.statuses.filter(track=track+"&follow="+follow)
+            track = ",".join(h.unescape(args[1]).split())
+            tweet_iter = stream.statuses.filter(track=track)
 
     # Iterate over the stream.
     for tweet in tweet_iter:
@@ -405,7 +414,7 @@ def create_stream(name, args = ""):
 
     proc_hooks[name] = weechat.hook_process("python3 " + SCRIPT_FILE_PATH + " " +
                 script_options["oauth_token"] + " " + script_options["oauth_secret"] + " " +
-                "stream " + file_name + ' "' + str(options) + '"',  0 , "my_process_cb", "")
+                "stream " + file_name + ' "' + str(options) + '"',  0 , "my_process_cb", str([buffer,""]))
     return "Started stream"
 
 def my_process_cb(data, command, rc, out, err):
