@@ -554,6 +554,8 @@ def get_twitter_data(cmd_args):
                 tweet_data = [twitter.statuses.show._(cmd_args[4])()]
             elif cmd_args[3] == "rt":
                 tweet_data = [twitter.statuses.retweet._(cmd_args[4])()]
+                #The home stream prints you messages as well...
+                tweet_data = []
             elif cmd_args[3] == "d":
                 #deletes tweet made by the user _(...) converts the id string to a call
                 #returns the tweet that was deleted (not a list(dict) just a dict)
@@ -563,9 +565,13 @@ def get_twitter_data(cmd_args):
                 #returns the tweet that was sent (not a list(dict) just a dict)
                 #make it into a list so we don't have to write special cases for this
                 tweet_data = [twitter.statuses.update(status=h.unescape(cmd_args[4]))]
+                #The home stream prints you messages as well...
+                tweet_data = []
             elif cmd_args[3] == "re":
                 tweet_data = [twitter.statuses.update(status=h.unescape(cmd_args[5]),
                     in_reply_to_status_id=cmd_args[4])]
+                #The home stream prints you messages as well...
+                tweet_data = []
             elif cmd_args[3] == "new":
                 tweet_data = twitter.statuses.home_timeline(since_id = cmd_args[4], count=200, exclude_replies = no_home_replies) 
             elif cmd_args[3] == "follow":
