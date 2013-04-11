@@ -2,10 +2,15 @@ import sys
 import ast
 import re
 import os
+import tempfile
 import time
 import calendar
+import socket
 
 # TODO:
+# "xt" willing to test when stream are in
+# hook_url, and hook socket
+# open new windows for streams
 # Add desc for script options
 # Replace the thread call, old api will be blocked soon
 # Show followers/friends (change api call because the current is limited)
@@ -65,7 +70,7 @@ command_dict = dict(thread="th",user="u",replies="r",view_tweet="v",
         followers="fo",about="a",block="b",unblock="ub",
         blocked_users="blocks",favorite="fav",unfavorite="unfav",
         favorites="favs", rate_limits="limits",home_timeline="home",
-        clear_nicks="cnicks")
+        clear_nicks="cnicks",clear_buffer="clear")
 desc_dict = dict(thread="<id>, Shows the conversation of the tweet",
         user="<user>[<id><count>|<id>|<count>], Request user timeline, " +
         "if <id> is given it will get tweets older than <id>, " +
@@ -111,17 +116,20 @@ desc_dict = dict(thread="<id>, Shows the conversation of the tweet",
         "<count> is how many tweets to get, valid number is 1-200",
         clear_nicks="Clear nicks from the 'Tweet_parse' nick group. "+
         "These nicks are parsed from recived tweets, it can get " +
-        "messy at times...")
+        "messy at times...",
+        clear_buffer="Clear the twitter buffer of text "+
+        "same as '/buffer clear'")
 
 SCRIPT_NAME = "twitter"
 SCRIPT_FILE_PATH = os.path.abspath(__file__)
 
 twit_buf = ""
 timer_hook = ""
-tweet_nicks_group = ""
-friends_nicks_group = ""
-#For delaying the home timeline update function so we do go over the rate limit
-home_counter = 0
+sock_hooks = {}
+proc_hooks = {}
+sock_fd_dict = {}
+tweet_nicks_group = {}
+friends_nicks_group = {}
 
 html_escape_table = {
     '"': "&quot;",
@@ -169,17 +177,17 @@ def config_cb(data, option, value):
 def add_to_nicklist(buf, nick, group=""):
     """Add nick to the nicklist."""
     if group == "":
-        group = friends_nicks_group
+        group = friends_nicks_group[buf]
     weechat.nicklist_add_nick(buf, group, nick, 'bar_fg', '', '', 1)
 
 def remove_from_nicklist(buf, nick, group=""):
     """Remove nick from the nicklist."""
     if group == "":
-        group = friends_nicks_group
+        group = friends_nicks_group[buf]
     nick_ptr = weechat.nicklist_search_nick(buf, group, nick)
     weechat.nicklist_remove_nick(buf, nick_ptr)
 
-def parse_for_nicks(text):
+def parse_for_nicks(text,buffer):
     #Parse text for twitter nicks and add them to nicklist
     regex = re.compile(r'@([A-Za-z0-9_]+)')
     reset = weechat.color('reset')
@@ -187,7 +195,218 @@ def parse_for_nicks(text):
         match = re.search(regex,word)
         if str(type(match)) == "<type '_sre.SRE_Match'>":
             nick = word[match.start(1):match.end(0)]
-            add_to_nicklist(twit_buf,nick,tweet_nicks_group)
+            add_to_nicklist(buffer,nick,tweet_nicks_group[buffer])
+
+def print_tweet_data(buffer,tweets,data):
+    
+    cur_date = time.strftime("%Y-%m-%d", time.gmtime())
+    
+    for message in tweets:
+        nick = message[1]
+        text = message[3]
+        reply_id = ""
+        parse_for_nicks(text,buffer)
+        add_to_nicklist(buffer,nick,tweet_nicks_group[buffer])
+
+        if script_options['print_id']:
+            t_id = weechat.color('reset') + ' ' + dict_tweet(message[2])
+        else:
+            t_id = ''
+
+        if len(message) == 5:
+            #This is a reply to a tweet
+            arrow_col = weechat.color('chat_prefix_suffix')
+            reset_col = weechat.color('reset')
+            reply_id = arrow_col +  "<" + reset_col + dict_tweet(message[4]) + arrow_col + "> " + reset_col
+            temp_text = text
+            text = reply_id
+            reply_id = temp_text
+
+        mes_date = time.strftime("%Y-%m-%d", time.gmtime(message[0]))
+        if cur_date != mes_date:
+            cur_date = mes_date
+            weechat.prnt(buffer, "\t\tDate: " + cur_date)
+
+        weechat.prnt_date_tags(buffer, message[0], "notify_message",
+                "%s%s\t%s%s" % (nick, t_id, text,reply_id))
+    if data == "id":
+        try:
+            if script_options['last_id'] < tweets[-1][2]:
+                script_options['last_id'] =tweets[-1][2]
+                # Save last id
+                weechat.config_set_plugin("last_id",script_options["last_id"])
+        except:
+            pass
+
+def trim_tweet_data(tweet_data, screen_name, alt_rt_style):
+    # Because of the huge amount of data, we need to cut down on most of it because we only really want
+    # a small subset of it. This also prevents the output buffer from overflowing when fetching many tweets
+    # at once.
+
+    h = html.parser.HTMLParser()
+
+    output = []
+    for message in tweet_data:
+        if alt_rt_style and message.get('retweeted_status'):
+            if message['user']['screen_name'] == screen_name:
+                #escape highlighting
+                message['user']['screen_name'] = "<you>"
+            message['text'] = message['retweeted_status']['text'] + " (retweeted by " + message['user']['screen_name'] + ")"
+            message['user'] = message['retweeted_status']['user']
+        mes_list =[calendar.timegm(time.strptime(message['created_at'],'%a %b %d %H:%M:%S +0000 %Y')),
+            message['user']['screen_name'],
+            message['id_str'],
+            h.unescape(message['text'])]
+        if message["in_reply_to_status_id_str"] != None:
+            mes_list.append(message["in_reply_to_status_id_str"]) 
+
+        output.append(mes_list)
+
+    output.reverse()
+    return output
+
+def twitter_stream_cb(buffer,fd):
+    #accept connection
+    server = sock_fd_dict[sock_fd_dict[fd]]
+    conn, addr = server.accept()
+    error = False
+    tweet = ""
+    data = True
+    while data:
+        try:
+            data = conn.recv(1024).decode('utf-8')
+            tweet += data
+        except:
+            break
+
+    try:
+        tweet = ast.literal_eval(tweet)
+        #weechat.prnt(buffer, "recv streamed tweet" + tweet)
+    except:
+        weechat.prnt(buffer, "Error resv stream message")
+        return weechat.WEECHAT_RC_OK
+    if buffer == twit_buf:
+        #Update last recv id
+        print_tweet_data(buffer,tweet,"id")
+    else:
+        print_tweet_data(buffer,tweet,"")
+    conn.close()
+    return weechat.WEECHAT_RC_OK
+
+def twitter_stream(cmd_args):
+    if len(cmd_args) < 5:
+        return "Invalid stream command"
+    if not os.path.exists(cmd_args[4]):
+        return "The socket file doesn't exist! " + cmd_args[4]
+
+    oauth_token = cmd_args[1]
+    oauth_secret= cmd_args[2]
+
+    try:
+        if cmd_args[-1][0] == "{":
+            option_dict = ast.literal_eval(cmd_args[-1])
+            cmd_args.pop(-1)
+            no_home_replies = option_dict['home_replies']
+            alt_rt_style = option_dict['alt_rt_style']
+            screen_name = option_dict['screen_name']
+            name = option_dict['name']
+            stream_args = option_dict['stream_args']
+    except:
+        return "Error starting stream, no option arguments"
+
+    def connect():
+        client = socket.socket( socket.AF_UNIX, socket.SOCK_STREAM )
+        client.connect(cmd_args[4])
+        #Don't block, timeout if no data is present
+        client.setblocking(0)
+        return client
+
+    if name == "twitter":
+        #home timeline stream
+        stream = TwitterStream(auth=OAuth(
+                oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
+                domain="userstream.twitter.com")
+        tweet_iter = stream.user()
+    else:
+        h = html.parser.HTMLParser() 
+        args = stream_args.split(" & ")
+        stream = TwitterStream(auth=OAuth(
+                oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET))
+
+        if len(args) == 2:
+            follow = ",".join(h.unescape(args[0]).split())
+            track = ",".join(h.unescape(args[0]).split())
+        else:
+            follow = ",".join(h.unescape(args[0]).split())
+            track = ""
+        tweet_iter = stream.statuses.filter(track=track+"&follow="+follow)
+
+    # Iterate over the stream.
+    for tweet in tweet_iter:
+        # You must test that your tweet has text. It might be a delete
+        # or data message.
+        if tweet.get('text'):
+            tweet = trim_tweet_data([tweet],screen_name,alt_rt_style)
+            client = connect()
+            client.sendall(bytes(str(tweet),"utf-8"))
+            client.close()
+
+    return "Stream shut down"
+
+def stream_close_cb(name,buffer):
+    global sock_fd_dict
+    global proc_hooks
+    weechat.unhook(sock_hooks[name])
+    weechat.unhook(proc_hooks[name])
+    #remove fd key
+    for key, value in sock_fd_dict.items():
+        if value == name:
+            sock_fd_dict.pop(key, None)
+            break
+    sock_fd_dict[name].close()
+    proc_hooks.pop(name,None)
+    sock_fd_dict.pop(name, None)
+    return weechat.WEECHAT_RC_OK
+
+def create_stream(name, args = ""):
+    global sock_fd_dict
+    global proc_hooks
+    global sock_hooks
+
+    if proc_hooks.get(name):
+        return "Stream has already been created, close it before trying to open a new one"
+    
+    #Check if buffer exists
+    buffer = weechat.buffer_search("python", name)
+    if buffer == "":
+        buffer = weechat.buffer_new(name, "buffer_input_cb", name, "stream_close_cb", name)
+        setup_buffer(buffer)
+
+    if not sock_fd_dict.get(name):
+        file_name = tempfile.gettempdir() + "/we_tw_" + name
+        if os.path.exists(file_name):
+            os.remove(file_name)
+    
+        server = socket.socket( socket.AF_UNIX, socket.SOCK_STREAM )
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind(file_name)
+        #Don't block, timeout if no data is present
+        server.setblocking(0)
+        server.listen(1)
+        file_fd = server.fileno()
+        sock_fd_dict[str(file_fd)] = name
+        sock_fd_dict[name] = server
+        sock_hooks[name] = weechat.hook_fd(file_fd, 1, 0, 0, "twitter_stream_cb", buffer)
+
+    options = dict(screen_name = script_options['screen_name'], name = name,
+            alt_rt_style = int(script_options['alt_rt_style']),
+            home_replies = int(script_options['home_replies']),
+            stream_args = args)
+
+    proc_hooks[name] = weechat.hook_process("python3 " + SCRIPT_FILE_PATH + " " +
+                script_options["oauth_token"] + " " + script_options["oauth_secret"] + " " +
+                "stream " + file_name + ' "' + str(options) + '"',  0 , "my_process_cb", "")
+    return "Started stream"
 
 def my_process_cb(data, command, rc, out, err):
 
@@ -196,8 +415,11 @@ def my_process_cb(data, command, rc, out, err):
                 command.replace(script_options["oauth_token"],"").replace(script_options["oauth_secret"],""))
         return weechat.WEECHAT_RC_OK
 
+    data = ast.literal_eval(data) 
+    buffer = data[0]
+    end_mes = data[1]
+
     if out != "":
-        buffer = twit_buf
         if out[0] != "[" and out[0] != "{":
             #If message is just a string print it
             weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"), out))
@@ -205,25 +427,25 @@ def my_process_cb(data, command, rc, out, err):
         process_output = ast.literal_eval(out)
         #List message
         # TODO :blocks returns more then 60
-        if len(data) >= 1 and data[0] == "L":
+        if len(end_mes) >= 1 and end_mes[0] == "L":
             if len(process_output) > 60:
                 t_id = dict_tweet(str(process_output[60])) + "\t"
                 process_output = process_output[:60]
-                end_mes = " ..."
+                more = " ..."
             else:
                 t_id = weechat.prefix("network")
-                end_mes = ""
+                more = ""
 
             for nick in process_output:
-                if data == "LYFollowing":
+                if end_mes == "LYFollowing":
                     add_to_nicklist(buffer,nick)
                 else:
-                    add_to_nicklist(buffer,nick,tweet_nicks_group)
+                    add_to_nicklist(buffer,nick,tweet_nicks_group[buffer])
             weechat.prnt_date_tags(buffer, 0, "no_highlight",
-                    "%s%s: %s%s" % (t_id, data[1:], process_output, end_mes))
+                    "%s%s: %s%s" % (t_id, end_mes[1:], process_output, more))
             return weechat.WEECHAT_RC_OK
 
-        if data == "About":
+        if end_mes == "About":
             weechat.prnt(buffer, "Nick: %s | Name: %s | Protected: %s" % (process_output['screen_name'],
                                                                         process_output['name'],
                                                                         process_output['protected']))
@@ -237,46 +459,10 @@ def my_process_cb(data, command, rc, out, err):
             weechat.prnt(buffer, "Are you currently following this person: %s" % (process_output['following']))
             return weechat.WEECHAT_RC_OK
 
-        cur_date = time.strftime("%Y-%m-%d", time.gmtime())
+        print_tweet_data(buffer,process_output,end_mes)
 
-        for message in process_output:
-            nick = message[1]
-            text = message[3]
-            reply_id = ""
-            parse_for_nicks(text)
-            add_to_nicklist(buffer,nick,tweet_nicks_group)
-
-            if script_options['print_id']:
-                t_id = weechat.color('reset') + ' ' + dict_tweet(message[2])
-            else:
-                t_id = ''
-
-            if len(message) == 5:
-                #This is a reply to a tweet
-                arrow_col = weechat.color('chat_prefix_suffix')
-                reset_col = weechat.color('reset')
-                reply_id = arrow_col +  "<" + reset_col + dict_tweet(message[4]) + arrow_col + "> " + reset_col
-                temp_text = text
-                text = reply_id
-                reply_id = temp_text
-
-            mes_date = time.strftime("%Y-%m-%d", time.gmtime(message[0]))
-            if cur_date != mes_date:
-                cur_date = mes_date
-                weechat.prnt(buffer, "\t\tDate: " + cur_date)
-
-            weechat.prnt_date_tags(buffer, message[0], "notify_message",
-                    "%s%s\t%s%s" % (nick, t_id, text,reply_id))
-        if data == "id":
-            try:
-                if script_options['last_id'] < process_output[-1][2]:
-                    script_options['last_id'] = process_output[-1][2]
-                    # Save last id
-                    weechat.config_set_plugin("last_id",script_options["last_id"])
-            except:
-                pass
-        elif data != "":
-            weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"), data))
+        if end_mes != "id" and end_mes != "":
+            weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"), end_mes))
     if err != "":
         weechat.prnt("", "stderr: %s" % err)
     return weechat.WEECHAT_RC_OK
@@ -288,12 +474,7 @@ def get_twitter_data(cmd_args):
     alt_rt_style = False
     screen_name = ""
 
-    try:
-        #This can get called from within weechat so catch
-        #the import error
-        h = html.parser.HTMLParser()
-    except:
-        pass
+    h = html.parser.HTMLParser()
     
     try:
         if cmd_args[-1][0] == "[":
@@ -307,11 +488,21 @@ def get_twitter_data(cmd_args):
     except:
         pass
 
-    if len(cmd_args) < 3:
+    if len(cmd_args) < 4:
         return "Invalid command"
 
     oauth_token = cmd_args[1]
     oauth_secret= cmd_args[2]
+    
+    if cmd_args[3] == "auth":
+        twitter = Twitter(
+            auth=OAuth(oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
+            format='', api_version=None)
+        if len(cmd_args) == 5:
+            #pin
+            return twitter.oauth.access_token(oauth_verifier=cmd_args[4])
+        else:
+            return twitter.oauth.request_token()
     try:
         if len(cmd_args) == 5 and cmd_args[3] == 'th':
             # use the old api to get the thread from a tweet
@@ -334,9 +525,9 @@ def get_twitter_data(cmd_args):
             twitter = Twitter(auth=OAuth(
             oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET))
     
-            if cmd_args[0] == "settings":
+            if cmd_args[3] == "settings":
                 #this only gets called from within weechat
-                return twitter.account.settings()
+                return twitter.account.settings()['screen_name']
             elif cmd_args[3] == "u":
                 kwargs = dict(count=20, screen_name=cmd_args[4])
                 if len(cmd_args) == 7:
@@ -468,34 +659,12 @@ def get_twitter_data(cmd_args):
                 return "Invalid command: " + cmd_args[3]
     except:
         return "Unexpected error in get_twitter_data:%s\n Call: %s" % (sys.exc_info(), cmd_args[3]) 
-    # Because of the huge amount of data, we need to cut down on most of it because we only really want
-    # a small subset of it. This also prevents the output buffer from overflowing when fetching many tweets
-    # at once.
-    output = []
-    for message in tweet_data:
-        if alt_rt_style and "retweeted_status" in message:
-            if message['user']['screen_name'] == screen_name:
-                #escape highlighting
-                message['user']['screen_name'] = "<you>"
-            message['text'] = message['retweeted_status']['text'] + " (retweeted by " + message['user']['screen_name'] + ")"
-            message['user'] = message['retweeted_status']['user']
-        mes_list =[calendar.timegm(time.strptime(message['created_at'],'%a %b %d %H:%M:%S +0000 %Y')),
-            message['user']['screen_name'],
-            message['id_str'],
-            h.unescape(message['text'])]
-        if message["in_reply_to_status_id_str"] != None:
-            mes_list.append(message["in_reply_to_status_id_str"]) 
 
-        output.append(mes_list)
-
-    output.reverse()
-
-    return output
+    return trim_tweet_data(tweet_data,screen_name,alt_rt_style)
 
 # callback for data received in input
 def buffer_input_cb(data, buffer, input_data):
     # ...
-    global home_counter
     end_message = ""
     options = [script_options['screen_name']]
     if script_options['alt_rt_style']:
@@ -508,22 +677,22 @@ def buffer_input_cb(data, buffer, input_data):
             weechat.prnt_date_tags(buffer, 0, "no_highlight", input_data)
         input_args = input_data.split()
         command = input_args[0][1:]
-        if command in command_dict:
+        if command_dict.get(command):
             input_data = input_data.replace(command,command_dict[command],1)
             command = command_dict[command]
-        if command == 'd' and input_args[1] in tweet_dict:
+        if command == 'd' and tweet_dict.get(input_args[1]):
             input_data = 'd ' + tweet_dict[input_args[1]]
             weechat.prnt(buffer, "%sYou deleted the following tweet:" % weechat.prefix("network"))
-        elif command == 'v' and input_args[1] in tweet_dict:
+        elif command == 'v' and tweet_dict.get(input_args[1]):
             input_data = 'v ' + tweet_dict[input_args[1]]
             end_message = "Done"
-        elif command == 'rt' and input_args[1] in tweet_dict:
+        elif command == 'rt' and tweet_dict.get(input_args[1]):
             end_message = "id"
             input_data = 'rt ' + tweet_dict[input_args[1]]
-        elif command == 're' and input_args[1] in tweet_dict:
+        elif command == 're' and tweet_dict.get(input_args[1]):
             end_message = "id"
             input_data = 're ' + tweet_dict[input_args[1]] + input_data[6:]
-        elif command == 'th' and input_args[1] in tweet_dict:
+        elif command == 'th' and tweet_dict.get(input_args[1]):
             weechat.prnt(buffer, "%sThread of the following tweet id: %s" % (weechat.prefix("network"), input_args[1]))
             input_data = 'th ' + tweet_dict[input_args[1]] + input_data[6:]
             end_message = "End of thread"
@@ -533,17 +702,9 @@ def buffer_input_cb(data, buffer, input_data):
                 input_data = 'new ' + script_options['last_id']
             else:
                 input_data = 'home'
-            if data != "silent":
-                #Delay the home timeline update so we don't go over the api req limits
-                home_counter += 1
         elif command == 'home' or command == 'r' or (command == 'favs' and len(input_args) >= 2 and input_args[1].isdigit()):
-            if command == 'home':
-                input_data = 'home'
-                #Delay the home timeline update so we don't go over the api req limits
-                home_counter += 1
-            else:
-                input_data = command
-            if len(input_args) == 3 and input_args[1] in tweet_dict and input_args[2].isdigit():
+            input_data = command
+            if len(input_args) == 3 and tweet_dict.get(input_args[1]) and input_args[2].isdigit():
                 num = int(input_args[2])
                 # 200 tweets is the max request limit
                 if num <= 200 and num > 0:
@@ -551,7 +712,7 @@ def buffer_input_cb(data, buffer, input_data):
                 else:
                     input_data += " " + tweet_dict[input_args[1]]
             elif len(input_args) == 2:
-                if input_args[1] in tweet_dict:
+                if tweet_dict.get(input_args[1]):
                     input_data += " " + tweet_dict[input_args[1]]
                 elif input_args[1].isdigit():
                     num = int(input_args[1])
@@ -561,7 +722,7 @@ def buffer_input_cb(data, buffer, input_data):
             end_message = "Done"
         elif command == 'u' or (command == 'favs' and len(input_args) >= 3):
             input_data = " ".join(input_args[:2])[1:]
-            if len(input_args) == 4 and input_args[2] in tweet_dict and input_args[3].isdigit():
+            if len(input_args) == 4 and tweet_dict.get(input_args[2]) and input_args[3].isdigit():
                 num = int(input_args[3])
                 # 200 tweets is the max request limit
                 if num <= 200 and num > 0:
@@ -569,7 +730,7 @@ def buffer_input_cb(data, buffer, input_data):
                 else:
                     input_data += " " + tweet_dict[input_args[2]]
             elif len(input_args) == 3:
-                if input_args[2] in tweet_dict:
+                if tweet_dict.get(input_args[2]):
                     input_data += " " + tweet_dict[input_args[2]]
                 elif input_args[2].isdigit():
                     num = int(input_args[2])
@@ -586,10 +747,10 @@ def buffer_input_cb(data, buffer, input_data):
         elif command == 'f' or command == 'fo':
             #L because we are returning a list to be printed later on
             end_message = "L"
-            if len(input_args) == 3 and input_args[2] in tweet_dict:
+            if len(input_args) == 3 and tweet_dict.get(input_args[2]):
                 input_data = command + " " + input_args[1] + " " + tweet_dict[input_args[2]]
             elif len(input_args) == 2:
-                if input_args[1] in tweet_dict:
+                if tweet_dict.get(input_args[1]):
                     input_data = command + " " + script_options['screen_name'] + " " + tweet_dict[input_args[1]]
                     #Your list, not any other users
                     end_message += "Y"
@@ -608,23 +769,30 @@ def buffer_input_cb(data, buffer, input_data):
         elif command == 'blocks':
             input_data = input_data[1:]
             end_message = "LBlock list"
-        elif command == 'fav' and input_args[1] in tweet_dict:
+        elif command == 'fav' and tweet_dict.get(input_args[1]):
             input_data = 'fav ' + tweet_dict[input_args[1]]
             weechat.prnt(buffer, "%sYou fave'd the following tweet:" % weechat.prefix("network"))
-        elif command == 'unfav' and input_args[1] in tweet_dict:
+        elif command == 'unfav' and tweet_dict.get(input_args[1]):
             input_data = 'unfav ' + tweet_dict[input_args[1]]
             weechat.prnt(buffer, "%sYou unfave'd the following tweet:" % weechat.prefix("network"))
         elif command == 'cnicks':
             global tweet_nicks_group
-            if tweet_nicks_group != "":
-                weechat.nicklist_remove_group(buffer, tweet_nicks_group)
-                tweet_nicks_group = ""
-            tweet_nicks_group = weechat.nicklist_add_group(twit_buf, "", "Tweet_parse",
+            if tweet_nicks_group[buffer] != "":
+                weechat.nicklist_remove_group(buffer, tweet_nicks_group[buffer])
+                tweet_nicks_group[buffer] = ""
+            tweet_nicks_group[buffer] = weechat.nicklist_add_group(buffer, "", "Tweet_parse",
                     "weechat.color.nicklist_group", 1)
             return weechat.WEECHAT_RC_OK
         elif command == 'help':
             weechat.command(buffer,"/help twitter")
             weechat.prnt(buffer, "Exec command /help twitter, check your root buffer")
+            return weechat.WEECHAT_RC_OK
+        elif command == 'clear':
+            weechat.command(buffer,"/buffer clear")
+            return weechat.WEECHAT_RC_OK
+        elif command == 'stream':
+            args = html_escape(input_data[7:])
+            weechat.prnt(buffer,create_stream("t_stream",args))
             return weechat.WEECHAT_RC_OK
         else:
             input_data = input_data[1:]
@@ -637,13 +805,13 @@ def buffer_input_cb(data, buffer, input_data):
 
     weechat.hook_process("python3 " + SCRIPT_FILE_PATH + " " +
                 script_options["oauth_token"] + " " + script_options["oauth_secret"] + " " +
-                input_data + " " + '"' + str(options) + '"', 10 * 1000, "my_process_cb", end_message)
+                input_data + " " + '"' + str(options) + '"', 10 * 1000, "my_process_cb", str([buffer,end_message]))
     return weechat.WEECHAT_RC_OK
 
 def my_command_cb(data, buffer, args):
     # ...
 
-    buffer_input_cb(data, buffer, ":"+args)
+    buffer_input_cb(data, twit_buf, ":"+args)
 
     return weechat.WEECHAT_RC_OK
 
@@ -680,22 +848,9 @@ def hook_commands_and_completions():
 # callback called when buffer is closed
 # TODO rewrite this so it unloads the plugin
 def buffer_close_cb(data, buffer):
-    # ...
+    # ...      
     #TODO handle multiple buffers and free up global buffer pointers
     weechat.unhook_all()
-    return weechat.WEECHAT_RC_OK
-
-def timer_cb(data, remaining_calls):
-    # ...
-    #Get latest tweets from timeline
-    global home_counter
-    # Max 15 request for home timeline per 15min
-    # If users req the home timeline delay the auto update
-    if home_counter == 0:
-        buffer_input_cb("silent", buffer, ":new")
-    else:
-        home_counter -= 1
-
     return weechat.WEECHAT_RC_OK
 
 def tweet_length(message):
@@ -720,7 +875,7 @@ def tweet_length(message):
     return len(new_message)
 
 def my_modifier_cb(data, modifier, modifier_data, string):
-    if weechat.current_buffer() != twit_buf:
+    if not weechat.current_buffer() in friends_nicks_group:
         return string
 
     #check if this is a commandline argument
@@ -740,44 +895,6 @@ def my_modifier_cb(data, modifier, modifier_data, string):
 
     return string
 
-def oauth_dance(buffer, pin = ""):
-    #Auth the twitter client
-
-    global script_options
-
-    if pin == "":
-        weechat.prnt(buffer,"Hi there! We're gonna get you all set up to use this plugin.")
-        twitter = Twitter(
-            auth=OAuth('', '', CONSUMER_KEY, CONSUMER_SECRET),
-            format='', api_version=None)
-        oauth_token, oauth_token_secret = parse_oauth_tokens(
-            twitter.oauth.request_token())
-        weechat.prnt(buffer,"""
-    In the web browser window that opens please choose to Allow
-    access. Copy the PIN number that appears on the next page and type ":auth <pin>"
-    in weechat. For example ":auth 123456"
-    """)
-        oauth_url = ('http://api.twitter.com/oauth/authorize?oauth_token=' +
-                     oauth_token)
-        weechat.prnt(buffer," Please go here to get your PIN: " + oauth_url)
-
-        script_options['oauth_token'] = oauth_token
-        script_options['oauth_secret'] = oauth_token_secret
-    else:
-        oauth_verifier = pin.strip()
-        twitter = Twitter(
-            auth=OAuth(
-                script_options['oauth_token'], script_options['oauth_secret'],
-                CONSUMER_KEY, CONSUMER_SECRET),
-            format='', api_version=None)
-        oauth_token, oauth_token_secret = parse_oauth_tokens(
-            twitter.oauth.access_token(oauth_verifier=oauth_verifier))
-        
-        weechat.config_set_plugin('oauth_token', oauth_token)
-        weechat.config_set_plugin('oauth_secret', oauth_token_secret)
-        weechat.config_set_plugin('auth_complete', True)
-        finish_init()
-
 def parse_oauth_tokens(result):
     for r in result.split('&'):
         k, v = r.split('=')
@@ -787,31 +904,97 @@ def parse_oauth_tokens(result):
             oauth_token_secret = v
     return oauth_token, oauth_token_secret
 
-def finish_init():
-    global timer_hook
-    global home_counter
+def oauth_proc_cb(data, command, rc, out, err):
 
+    global script_options
     buffer = twit_buf
 
-    if script_options['screen_name'] == "":
-        user_nick = get_twitter_data(['settings', script_options["oauth_token"], script_options["oauth_secret"]])['screen_name'] 
-        weechat.config_set_plugin('screen_name', user_nick)
+    if rc == weechat.WEECHAT_HOOK_PROCESS_ERROR:
+        weechat.prnt("", "Error with command '%s'" %
+                command.replace(script_options["oauth_token"],"").replace(script_options["oauth_secret"],""))
+        return weechat.WEECHAT_RC_OK
+
+    if out != "":
+        if data == "nick":
+            weechat.config_set_plugin('screen_name', user_nick)
+        elif data == "auth1":
+            #First auth step to request pin code
+            oauth_token, oauth_token_secret = parse_oauth_tokens(out)
+            script_options['oauth_token'] = oauth_token
+            script_options['oauth_secret'] = oauth_token_secret
+            weechat.prnt(buffer,"""
+    Copy the PIN number that appears on the linked web page and type ":auth <pin>"
+    in weechat. For example ":auth 123456"
+    """)
+            oauth_url = ('http://api.twitter.com/oauth/authorize?oauth_token=' +
+                     oauth_token)
+            weechat.prnt(buffer," Please go here to get your PIN: " + oauth_url)
+        elif data == "auth2":
+            oauth_token, oauth_token_secret = parse_oauth_tokens(out)
+            weechat.config_set_plugin('oauth_token', oauth_token)
+            weechat.config_set_plugin('oauth_secret', oauth_token_secret)
+            weechat.config_set_plugin('auth_complete', True)
+            weechat.prnt(buffer," Done! now you can begin using this script!")
+            finish_init()
+    return weechat.WEECHAT_RC_OK
+
+def oauth_dance(buffer, pin = ""):
+    #Auth the twitter client
+    if pin == "":
+        weechat.prnt(buffer,"Hi there! We're gonna get you all set up to use this plugin.")
+        weechat.hook_process("python3 " + SCRIPT_FILE_PATH + " " + "''" + "''" +
+                "auth", 10 * 1000, "oauth_proc_cb", "auth1")
     else:
-        user_nick = script_options['screen_name']
+        oauth_verifier = pin.strip()
+        weechat.hook_process("python3 " + SCRIPT_FILE_PATH + " " +
+                script_options["oauth_token"] + " " + script_options["oauth_secret"] + " " +
+                "auth "+ oauth_verifier, 10 * 1000, "oauth_proc_cb", "auth2")
+
+def setup_buffer(buffer):
+    # set title
+    weechat.buffer_set(buffer, "title", "Twitter buffer, type ':help' for options.")
+    
+    # disable logging, by setting local variable "no_log" to "1"
+    weechat.buffer_set(buffer, "localvar_set_no_log", "1")
+
+    #create main nicklist
+    friends_nicks_group[buffer] = weechat.nicklist_add_group(buffer, "", "Friends",
+                "weechat.color.nicklist_group", 1)
+
+    tweet_nicks_group[buffer] = weechat.nicklist_add_group(buffer, "", "Tweet_parse",
+                "weechat.color.nicklist_group", 1)
+    autocomp_group = weechat.nicklist_add_group(buffer, "", "Autocomp",
+                "weechat.color.nicklist_group", 1)
+    #newline autocomplete
+    weechat.nicklist_add_nick(buffer, autocomp_group, "&#13;&#10;", 'bar_fg', '', '', 1)
+
+    #show nicklist
+    weechat.buffer_set(buffer, "nicklist", "1")
+    
+    user_nick = script_options['screen_name']
 
     weechat.buffer_set(buffer, "localvar_set_nick", user_nick)
 
     add_to_nicklist(buffer, user_nick)
     # Highlight user nick
     weechat.buffer_set(buffer, "highlight_words", user_nick)
+
+def finish_init():
+    global timer_hook
+
+    buffer = twit_buf
+
+    if script_options['screen_name'] == "":
+        weechat.hook_process("python3 " + SCRIPT_FILE_PATH + " " +
+                script_options["oauth_token"] + " " + script_options["oauth_secret"] + " " +
+                "settings []", 10 * 1000, "oauth_proc_cb", "nick")
+
+    setup_buffer(buffer)
+
     #Print friends
     buffer_input_cb("silent", buffer, ":f")
     #Get latest tweets from timeline
     buffer_input_cb("silent", buffer, ":new")
-    home_counter += 1
-    # timer called each nearly each minute. 
-    # Add drift so we are sure not to collide with the api limit window before it resets
-    timer_hook = weechat.hook_timer(63 * 1000, 0, 0, "timer_cb", "")
 
 if __name__ == "__main__" and weechat_call:
     weechat.register( SCRIPT_NAME , "DarkDefender", "1.0", "GPL3", "Weechat twitter client", "", "")
@@ -837,42 +1020,26 @@ if __name__ == "__main__" and weechat_call:
         # hook for config changes
         
         weechat.hook_config("plugins.var.python." + SCRIPT_NAME + ".*", "config_cb", "")
-
+        
         # create buffer
         twit_buf = weechat.buffer_new("twitter", "buffer_input_cb", "", "buffer_close_cb", "")
-        
-        # set title
-        weechat.buffer_set(twit_buf, "title", "Twitter buffer, type ':help' for options.")
-        
-        # disable logging, by setting local variable "no_log" to "1"
-        weechat.buffer_set(twit_buf, "localvar_set_no_log", "1")
-
-        #create main nicklist
-        friends_nicks_group = weechat.nicklist_add_group(twit_buf, "", "Friends",
-                    "weechat.color.nicklist_group", 1)
-
-        tweet_nicks_group = weechat.nicklist_add_group(twit_buf, "", "Tweet_parse",
-                    "weechat.color.nicklist_group", 1)
-        autocomp_group = weechat.nicklist_add_group(twit_buf, "", "Autocomp",
-                    "weechat.color.nicklist_group", 1)
-        #newline autocomplete
-        weechat.nicklist_add_nick(twit_buf, autocomp_group, "&#13;&#10;", 'bar_fg', '', '', 1)
-
-        #show nicklist
-        weechat.buffer_set(twit_buf, "nicklist", "1")
-
+    
         #Hook text input so we can update the bar item
         weechat.hook_modifier("input_text_display", "my_modifier_cb", "")
 
         if script_options['auth_complete']:
             finish_init()
+            #create home_timeline stream
+            create_stream("twitter")
         else:
             weechat.prnt(twit_buf,"""You have to register this plugin with twitter for it to work.
 Type ":auth" and follow the instructions to do that""")
-            weechat.prnt(twit_buf,"Weechat might freeze for short periods of time during this setup.")
-
-elif import_ok: 
-    print(get_twitter_data(sys.argv))
+             
+elif import_ok:
+    if sys.argv[3] == "stream":
+        print(twitter_stream(sys.argv))
+    else:
+        print(get_twitter_data(sys.argv))
 else:
     print("Can't load twitter python lib")
 
