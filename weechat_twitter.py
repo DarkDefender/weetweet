@@ -57,6 +57,7 @@ script_options = {
     "print_id" : True,
     "alt_rt_style" : False,
     "home_replies" : False,
+    "tweet_nicks" : True,
 }
 
 tweet_dict = {'cur_index': "a0"}
@@ -160,7 +161,7 @@ def dict_tweet(tweet_id):
 def read_config():
     for item in script_options:
         script_options[item] = weechat.config_string(weechat.config_get("plugins.var.python."+SCRIPT_NAME+"." + item))
-    for item in ["auth_complete","print_id","alt_rt_style","home_replies"]:
+    for item in ["auth_complete","print_id","alt_rt_style","home_replies","tweet_nicks"]:
         #Convert to bool
         script_options[item] = weechat.config_string_to_boolean(script_options[item])
 
@@ -202,8 +203,9 @@ def print_tweet_data(buffer,tweets,data):
         nick = message[1]
         text = message[3]
         reply_id = ""
-        parse_for_nicks(text,buffer)
-        add_to_nicklist(buffer,nick,tweet_nicks_group[buffer])
+        if script_options['tweet_nicks']:
+            parse_for_nicks(text,buffer)
+            add_to_nicklist(buffer,nick,tweet_nicks_group[buffer])
 
         if script_options['print_id']:
             t_id = weechat.color('reset') + ' ' + dict_tweet(message[2])
@@ -446,7 +448,7 @@ def my_process_cb(data, command, rc, out, err):
             for nick in process_output:
                 if end_mes == "LYFollowing":
                     add_to_nicklist(buffer,nick)
-                else:
+                elif script_options['tweet_nicks']:
                     add_to_nicklist(buffer,nick,tweet_nicks_group[buffer])
             weechat.prnt_date_tags(buffer, 0, "no_highlight",
                     "%s%s: %s%s" % (t_id, end_mes[1:], process_output, more))
