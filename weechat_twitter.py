@@ -711,7 +711,7 @@ def buffer_input_cb(data, buffer, input_data):
             input_data = 'rt ' + tweet_dict[input_args[1]]
         elif command == 're' and tweet_dict.get(input_args[1]):
             end_message = "id"
-            input_data = 're ' + tweet_dict[input_args[1]] + input_data[6:]
+            input_data = 're ' + tweet_dict[input_args[1]] + " '" + html_escape(input_data[6:]) + "'"
         elif command == 'th' and tweet_dict.get(input_args[1]):
             weechat.prnt(buffer, "%sThread of the following tweet id: %s" % (weechat.prefix("network"), input_args[1]))
             input_data = 'th ' + tweet_dict[input_args[1]] + input_data[6:]
