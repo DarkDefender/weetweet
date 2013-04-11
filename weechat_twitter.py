@@ -11,7 +11,6 @@ import socket
 # "xt" willing to test when stream are in
 # Add desc for script options
 # Replace the thread call, old api will be blocked soon
-# Show followers/friends (change api call because the current is limited)
 
 # This twitter plugin can be extended even more. Just look at the twitter api
 # doc here: https://dev.twitter.com/docs/api/1.1
@@ -435,11 +434,10 @@ def my_process_cb(data, command, rc, out, err):
             return weechat.WEECHAT_RC_OK
         process_output = ast.literal_eval(out)
         #List message
-        # TODO :blocks returns more then 60
         if len(end_mes) >= 1 and end_mes[0] == "L":
-            if len(process_output) > 60:
-                t_id = dict_tweet(str(process_output[60])) + "\t"
-                process_output = process_output[:60]
+            if isinstance(process_output[-1], int):
+                t_id = dict_tweet(str(process_output[-1])) + "\t"
+                process_output = process_output[:-1]
                 more = " ..."
             else:
                 t_id = weechat.prefix("network")
@@ -591,21 +589,26 @@ def get_twitter_data(cmd_args):
                 twitter.friendships.destroy(screen_name = cmd_args[4])
             elif cmd_args[3] == "f" or cmd_args[3] == "fo":
                 if len(cmd_args) == 6:
-                    kwargs = dict(screen_name = cmd_args[4], skip_status = True, cursor = int(cmd_args[5]))
+                    kwargs = dict(screen_name = cmd_args[4], stringify_ids = True, cursor = int(cmd_args[5]), count = 250)
                 else:
-                    kwargs = dict(screen_name = cmd_args[4], skip_status = True, cursor = -1)
+                    kwargs = dict(screen_name = cmd_args[4], stringify_ids = True, cursor = -1, count = 250)
+                if cmd_args[3] == "f":
+                    tweet_data = twitter.friends.ids(**kwargs)
+                else:
+                    tweet_data = twitter.followers.ids(**kwargs)
+                kwargs['cursor'] = tweet_data['next_cursor']
+                friend_ids = tweet_data['ids']
                 friend_list = list()
-                num = 1
-                #Get max 20*3 users
-                while(kwargs['cursor'] != 0 and num <= 3):
-                    if cmd_args[3] == "f":
-                        tweet_data = twitter.friends.list(**kwargs)
-                    else:
-                        tweet_data = twitter.followers.list(**kwargs)
-                    kwargs['cursor'] = tweet_data['next_cursor']
-                    num += 1
-                    for user in tweet_data['users']:
+                
+                while len(friend_ids) > 100:
+                    tweet_data = twitter.users.lookup(user_id=",".join(friend_ids[:100]))
+                    friend_ids = friend_ids[100:]
+                    for user in tweet_data:
                         friend_list.append(user['screen_name'])
+                tweet_data = twitter.users.lookup(user_id=",".join(friend_ids))
+                for user in tweet_data:
+                    friend_list.append(user['screen_name'])
+
                 if kwargs['cursor'] != 0:
                     friend_list.append(kwargs['cursor'])
                 return friend_list
