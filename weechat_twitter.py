@@ -68,7 +68,7 @@ command_dict = dict(thread="th",user="u",replies="r",view_tweet="v",
         followers="fo",about="a",block="b",unblock="ub",
         blocked_users="blocks",favorite="fav",unfavorite="unfav",
         favorites="favs", rate_limits="limits",home_timeline="home",
-        clear_nicks="cnicks",clear_buffer="clear")
+        clear_nicks="cnicks",clear_buffer="clear",create_stream="stream")
 desc_dict = dict(thread="<id>, Shows the conversation of the tweet",
         user="<user>[<id><count>|<id>|<count>], Request user timeline, " +
         "if <id> is given it will get tweets older than <id>, " +
@@ -116,7 +116,13 @@ desc_dict = dict(thread="<id>, Shows the conversation of the tweet",
         "These nicks are parsed from recived tweets, it can get " +
         "messy at times...",
         clear_buffer="Clear the twitter buffer of text "+
-        "same as '/buffer clear'")
+        "same as '/buffer clear'",
+        create_stream="Create a twitter stream with the following filter "+
+        "options: <user to stream> & <keywords>. Note that they must be " +
+        "seperated by a ' & '. To only use keywords just have ' & ' in the "+
+        "begininng.\n NOTE: you can only have one stream at a time because "+
+        "twitter will IP ban you if you repeatedly request more than one "+
+        "stream.")
 
 SCRIPT_NAME = "weechat_twitter"
 SCRIPT_FILE_PATH = os.path.abspath(__file__)
