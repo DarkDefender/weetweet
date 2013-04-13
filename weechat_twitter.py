@@ -9,7 +9,6 @@ import socket
 
 # TODO:
 # "xt" willing to test when stream are in
-# Data seems to be GMT and not local time, fix
 # Add desc for script options
 # Replace the thread call, old api will be blocked soon
 
@@ -119,7 +118,7 @@ desc_dict = dict(thread="<id>, Shows the conversation of the tweet",
         clear_buffer="Clear the twitter buffer of text "+
         "same as '/buffer clear'")
 
-SCRIPT_NAME = "twitter"
+SCRIPT_NAME = "weechat_twitter"
 SCRIPT_FILE_PATH = os.path.abspath(__file__)
 
 twit_buf = ""
@@ -937,7 +936,8 @@ def oauth_proc_cb(data, command, rc, out, err):
 
     if out != "":
         if data == "nick":
-            weechat.config_set_plugin('screen_name', user_nick)
+            weechat.config_set_plugin('screen_name', out)
+            finish_init()
         elif data == "auth1":
             #First auth step to request pin code
             oauth_token, oauth_token_secret = parse_oauth_tokens(out)
@@ -954,16 +954,18 @@ def oauth_proc_cb(data, command, rc, out, err):
             oauth_token, oauth_token_secret = parse_oauth_tokens(out)
             weechat.config_set_plugin('oauth_token', oauth_token)
             weechat.config_set_plugin('oauth_secret', oauth_token_secret)
-            weechat.config_set_plugin('auth_complete', True)
+            weechat.config_set_plugin('auth_complete', "on")
             weechat.prnt(buffer," Done! now you can begin using this script!")
-            finish_init()
+            weechat.hook_process("python3 " + SCRIPT_FILE_PATH + " " +
+                    script_options["oauth_token"] + " " + script_options["oauth_secret"] + " " +
+                    "settings []", 10 * 1000, "oauth_proc_cb", "nick")
     return weechat.WEECHAT_RC_OK
 
 def oauth_dance(buffer, pin = ""):
     #Auth the twitter client
     if pin == "":
         weechat.prnt(buffer,"Hi there! We're gonna get you all set up to use this plugin.")
-        weechat.hook_process("python3 " + SCRIPT_FILE_PATH + " " + "''" + "''" +
+        weechat.hook_process("python3 " + SCRIPT_FILE_PATH + " " + "'' " + "'' " +
                 "auth", 10 * 1000, "oauth_proc_cb", "auth1")
     else:
         oauth_verifier = pin.strip()
@@ -1006,10 +1008,10 @@ def finish_init():
     buffer = twit_buf
 
     if script_options['screen_name'] == "":
-        weechat.hook_process("python3 " + SCRIPT_FILE_PATH + " " +
+         weechat.hook_process("python3 " + SCRIPT_FILE_PATH + " " +
                 script_options["oauth_token"] + " " + script_options["oauth_secret"] + " " +
                 "settings []", 10 * 1000, "oauth_proc_cb", "nick")
-
+         return
     setup_buffer(buffer)
 
     #Print friends
