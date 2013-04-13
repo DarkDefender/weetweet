@@ -9,6 +9,7 @@ import socket
 
 # TODO:
 # "xt" willing to test when stream are in
+# Data seems to be GMT and not local time, fix
 # Add desc for script options
 # Replace the thread call, old api will be blocked soon
 
@@ -196,8 +197,8 @@ def parse_for_nicks(text,buffer):
             add_to_nicklist(buffer,nick,tweet_nicks_group[buffer])
 
 def print_tweet_data(buffer,tweets,data):
-    
-    cur_date = time.strftime("%Y-%m-%d", time.gmtime())
+
+    cur_date = time.strftime("%Y-%m-%d", time.localtime())
     
     for message in tweets:
         nick = message[1]
@@ -221,7 +222,7 @@ def print_tweet_data(buffer,tweets,data):
             text = reply_id
             reply_id = temp_text
 
-        mes_date = time.strftime("%Y-%m-%d", time.gmtime(message[0]))
+        mes_date = time.strftime("%Y-%m-%d", time.localtime(message[0]))
         if cur_date != mes_date:
             cur_date = mes_date
             weechat.prnt(buffer, "\t\tDate: " + cur_date)
@@ -231,7 +232,7 @@ def print_tweet_data(buffer,tweets,data):
     if data == "id":
         try:
             if script_options['last_id'] < tweets[-1][2]:
-                script_options['last_id'] =tweets[-1][2]
+                script_options['last_id'] = tweets[-1][2]
                 # Save last id
                 weechat.config_set_plugin("last_id",script_options["last_id"])
         except:
