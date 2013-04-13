@@ -936,7 +936,7 @@ def oauth_proc_cb(data, command, rc, out, err):
 
     if out != "":
         if data == "nick":
-            weechat.config_set_plugin('screen_name', out)
+            weechat.config_set_plugin('screen_name', out.strip())
             finish_init()
         elif data == "auth1":
             #First auth step to request pin code
