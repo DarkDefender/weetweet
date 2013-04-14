@@ -944,6 +944,12 @@ def oauth_proc_cb(data, command, rc, out, err):
         if data == "nick":
             weechat.config_set_plugin('screen_name', out.strip())
             finish_init()
+        elif data == "friends":
+            process_output = ast.literal_eval(out)
+            for nick in process_output:
+                add_to_nicklist(buffer,nick)
+            #Get latest tweets from timeline
+            buffer_input_cb("silent", buffer, ":new")
         elif data == "auth1":
             #First auth step to request pin code
             oauth_token, oauth_token_secret = parse_oauth_tokens(out)
@@ -1020,10 +1026,10 @@ def finish_init():
          return
     setup_buffer(buffer)
 
-    #Print friends
-    buffer_input_cb("silent", buffer, ":f")
-    #Get latest tweets from timeline
-    buffer_input_cb("silent", buffer, ":new")
+    #Add friends to nick list and print new tweets
+    weechat.hook_process("python3 " + SCRIPT_FILE_PATH + " " +
+           script_options["oauth_token"] + " " + script_options["oauth_secret"] + " " +
+           "f " + script_options['screen_name'] + " []", 10 * 1000, "oauth_proc_cb", "friends")
 
 if __name__ == "__main__" and weechat_call:
     weechat.register( SCRIPT_NAME , "DarkDefender", "1.0", "GPL3", "Weechat twitter client", "", "")
