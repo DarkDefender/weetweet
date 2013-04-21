@@ -141,7 +141,7 @@ desc_dict = dict(thread="<id>, Shows the conversation of the tweet",
         "twitter will IP ban you if you repeatedly request more than one "+
         "stream.")
 
-SCRIPT_NAME = "weechat_twitter"
+SCRIPT_NAME = "weetweet"
 SCRIPT_FILE_PATH = os.path.abspath(__file__)
 
 twit_buf = ""
