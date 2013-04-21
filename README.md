@@ -1,4 +1,4 @@
-weechat_twitter
+weetweet
 ===============
 
 A twitter script for weechat written in python.
