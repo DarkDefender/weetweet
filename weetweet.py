@@ -27,7 +27,6 @@ import socket
 
 # TODO:
 # Add desc for script options
-# Replace the thread call, old api will be blocked soon
 
 # This twitter plugin can be extended even more. Just look at the twitter api
 # doc here: https://dev.twitter.com/docs/api/1.1
@@ -275,12 +274,14 @@ def trim_tweet_data(tweet_data, screen_name, alt_rt_style):
                 message['user']['screen_name'] = "<you>"
             message['text'] = message['retweeted_status']['text'] + " (retweeted by " + message['user']['screen_name'] + ")"
             message['user'] = message['retweeted_status']['user']
-        mes_list =[calendar.timegm(time.strptime(message['created_at'],'%a %b %d %H:%M:%S +0000 %Y')),
+        mes_list = [calendar.timegm(time.strptime(message['created_at'],'%a %b %d %H:%M:%S +0000 %Y')),
             message['user']['screen_name'],
             message['id_str'],
-            h.unescape(message['text'])]
+            #convert text to bytes so python2 can read it correctly
+            #TODO remove the encode when weechat is running python3 as default
+            h.unescape(message['text']).encode('utf-8')]
         if message["in_reply_to_status_id_str"] != None:
-            mes_list.append(message["in_reply_to_status_id_str"]) 
+            mes_list.append(message["in_reply_to_status_id_str"])
 
         output.append(mes_list)
 
