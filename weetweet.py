@@ -1,6 +1,6 @@
 #
 # Copyright (c) 2013 by DarkDefender <darkdefende (a) gmail.com>
-# File bugs here: https://github.com/DarkDefender/weechat_twitter
+# File bugs here: https://github.com/DarkDefender/weetweet
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -1028,7 +1028,7 @@ def finish_init():
            "f " + script_options['screen_name'] + " []", 10 * 1000, "oauth_proc_cb", "friends")
 
 if __name__ == "__main__" and weechat_call:
-    weechat.register( SCRIPT_NAME , "DarkDefender", "1.0", "GPL3", "Weechat twitter client", "", "")
+    weechat.register( SCRIPT_NAME , "DarkDefender", "1.1", "GPL3", "Weechat twitter client", "", "")
 
     if not import_ok:
         weechat.prnt("", "Can't load the python twitter lib!")
