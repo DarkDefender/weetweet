@@ -329,7 +329,7 @@ def twitter_stream(cmd_args):
         if cmd_args[-1][0] == "{":
             option_dict = ast.literal_eval(cmd_args[-1])
             cmd_args.pop(-1)
-            no_home_replies = option_dict['home_replies']
+            home_replies = option_dict['home_replies']
             alt_rt_style = option_dict['alt_rt_style']
             screen_name = option_dict['screen_name']
             name = option_dict['name']
@@ -344,46 +344,52 @@ def twitter_stream(cmd_args):
         client.setblocking(0)
         return client
 
-    if name == "twitter":
-        #home timeline stream
-        stream = TwitterStream(auth=OAuth(
-                oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
-                domain="userstream.twitter.com")
-        tweet_iter = stream.user()
-    else:
-        h = html.parser.HTMLParser() 
-        args = stream_args.split(" & ")
-        stream = TwitterStream(auth=OAuth(
+    try:
+        if name == "twitter":
+            #home timeline stream
+            stream = TwitterStream(auth=OAuth(
+                    oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
+                    domain="userstream.twitter.com")
+            if home_replies:
+                tweet_iter = stream.user(replies="all")
+            else:
+                tweet_iter = stream.user()
+        else:
+            h = html.parser.HTMLParser() 
+            args = stream_args.split(" & ")
+            stream = TwitterStream(auth=OAuth(
+                    oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET))
+
+            twitter = Twitter(auth=OAuth(
                 oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET))
 
-        twitter = Twitter(auth=OAuth(
-            oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET))
-
-        if args[0] != "":
-            follow = ",".join(h.unescape(args[0]).split())
-            twitter_data = twitter.users.lookup(screen_name=follow)
-            follow_ids = ""
-            for user in twitter_data:
-                follow_ids += user['id_str'] + ","
-            follow_ids = follow_ids[:-1]
-            if len(args) == 2 and args[1] != "":
-                track = ",".join(h.unescape(args[1]).split())
-                tweet_iter = stream.statuses.filter(track=track,follow=follow_ids)
+            if args[0] != "":
+                follow = ",".join(h.unescape(args[0]).split())
+                twitter_data = twitter.users.lookup(screen_name=follow)
+                follow_ids = ""
+                for user in twitter_data:
+                    follow_ids += user['id_str'] + ","
+                follow_ids = follow_ids[:-1]
+                if len(args) == 2 and args[1] != "":
+                    track = ",".join(h.unescape(args[1]).split())
+                    tweet_iter = stream.statuses.filter(track=track,follow=follow_ids)
+                else:
+                    tweet_iter = stream.statuses.filter(follow=follow_ids)
             else:
-                tweet_iter = stream.statuses.filter(follow=follow_ids)
-        else:
-            track = ",".join(h.unescape(args[1]).split())
-            tweet_iter = stream.statuses.filter(track=track)
+                track = ",".join(h.unescape(args[1]).split())
+                tweet_iter = stream.statuses.filter(track=track)
 
-    # Iterate over the stream.
-    for tweet in tweet_iter:
-        # You must test that your tweet has text. It might be a delete
-        # or data message.
-        if tweet.get('text'):
-            tweet = trim_tweet_data([tweet],screen_name,alt_rt_style)
-            client = connect()
-            client.sendall(bytes(str(tweet),"utf-8"))
-            client.close()
+        # Iterate over the stream.
+        for tweet in tweet_iter:
+            # You must test that your tweet has text. It might be a delete
+            # or data message.
+            if tweet.get('text'):
+                tweet = trim_tweet_data([tweet],screen_name,alt_rt_style)
+                client = connect()
+                client.sendall(bytes(str(tweet),"utf-8"))
+                client.close()
+    except:
+        return "Stream error"
 
     return "Stream shut down"
 
@@ -439,7 +445,7 @@ def create_stream(name, args = ""):
 
     proc_hooks[name] = weechat.hook_process("python3 " + SCRIPT_FILE_PATH + " " +
                 script_options["oauth_token"] + " " + script_options["oauth_secret"] + " " +
-                "stream " + file_name + ' "' + str(options) + '"',  0 , "my_process_cb", str([buffer,""]))
+                "stream " + file_name + ' "' + str(options) + '"',  0 , "my_process_cb", str([buffer,"Stream"]))
     return "Started stream"
 
 def my_process_cb(data, command, rc, out, err):
@@ -491,6 +497,13 @@ def my_process_cb(data, command, rc, out, err):
                                                                                                process_output['statuses_count']))
             weechat.prnt(buffer, "Are you currently following this person: %s" % (process_output['following']))
             return weechat.WEECHAT_RC_OK
+        
+        elif end_mes == "Stream":
+            #Clean up the stream hooks
+            name = weechat.buffer_get_string(buffer, "name")
+            stream_close_cb(name, buffer)
+            #TODO restart stream correctly
+            #create_stream(name)
 
         print_tweet_data(buffer,process_output,end_mes)
 
@@ -570,6 +583,8 @@ def get_twitter_data(cmd_args):
         elif cmd_args[3] == "rt":
             tweet_data = [twitter.statuses.retweet._(cmd_args[4])()]
             #The home stream prints you messages as well...
+            # TODO add a switch to print this if the user has deatived the home timeline stream.
+            # For all commands like this!
             tweet_data = []
         elif cmd_args[3] == "d":
             #deletes tweet made by the user _(...) converts the id string to a call
@@ -588,7 +603,9 @@ def get_twitter_data(cmd_args):
             #The home stream prints you messages as well...
             tweet_data = []
         elif cmd_args[3] == "new":
-            tweet_data = twitter.statuses.home_timeline(since_id = cmd_args[4], count=200, exclude_replies = no_home_replies) 
+            tweet_data = twitter.statuses.home_timeline(since_id = cmd_args[4], count=200, exclude_replies = no_home_replies)
+            if tweet_data == []:
+                return "No new tweets available."
         elif cmd_args[3] == "follow":
             tweet_data = []
             twitter.friendships.create(screen_name = cmd_args[4]) 
