@@ -344,52 +344,54 @@ def twitter_stream(cmd_args):
         client.setblocking(0)
         return client
 
-    try:
-        if name == "twitter":
-            #home timeline stream
-            stream = TwitterStream(auth=OAuth(
-                    oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
-                    domain="userstream.twitter.com")
-            if home_replies:
-                tweet_iter = stream.user(replies="all")
-            else:
-                tweet_iter = stream.user()
+    # These arguments are optional. But the current code only handles this
+    # configuration. So it's defined here if the defaults change.
+    stream_args = dict( timeout=None, block=True, heartbeat_timeout=90 )
+
+    if name == "twitter":
+        #home timeline stream
+        stream = TwitterStream(auth=OAuth(
+                oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
+                domain="userstream.twitter.com", **stream_args)
+        if home_replies:
+            tweet_iter = stream.user(replies="all")
         else:
-            h = html.parser.HTMLParser() 
-            args = stream_args.split(" & ")
-            stream = TwitterStream(auth=OAuth(
-                    oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET))
+            tweet_iter = stream.user()
+    else:
+        h = html.parser.HTMLParser() 
+        args = stream_args.split(" & ")
+        stream = TwitterStream(auth=OAuth(
+                oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
+    	    **stream_args)
 
-            twitter = Twitter(auth=OAuth(
-                oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET))
+        twitter = Twitter(auth=OAuth(
+            oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET))
 
-            if args[0] != "":
-                follow = ",".join(h.unescape(args[0]).split())
-                twitter_data = twitter.users.lookup(screen_name=follow)
-                follow_ids = ""
-                for user in twitter_data:
-                    follow_ids += user['id_str'] + ","
-                follow_ids = follow_ids[:-1]
-                if len(args) == 2 and args[1] != "":
-                    track = ",".join(h.unescape(args[1]).split())
-                    tweet_iter = stream.statuses.filter(track=track,follow=follow_ids)
-                else:
-                    tweet_iter = stream.statuses.filter(follow=follow_ids)
-            else:
+        if args[0] != "":
+            follow = ",".join(h.unescape(args[0]).split())
+            twitter_data = twitter.users.lookup(screen_name=follow)
+            follow_ids = ""
+            for user in twitter_data:
+                follow_ids += user['id_str'] + ","
+            follow_ids = follow_ids[:-1]
+            if len(args) == 2 and args[1] != "":
                 track = ",".join(h.unescape(args[1]).split())
-                tweet_iter = stream.statuses.filter(track=track)
+                tweet_iter = stream.statuses.filter(track=track,follow=follow_ids)
+            else:
+                tweet_iter = stream.statuses.filter(follow=follow_ids)
+        else:
+            track = ",".join(h.unescape(args[1]).split())
+            tweet_iter = stream.statuses.filter(track=track)
 
-        # Iterate over the stream.
-        for tweet in tweet_iter:
-            # You must test that your tweet has text. It might be a delete
-            # or data message.
-            if tweet.get('text'):
-                tweet = trim_tweet_data([tweet],screen_name,alt_rt_style)
-                client = connect()
-                client.sendall(bytes(str(tweet),"utf-8"))
-                client.close()
-    except:
-        return "Stream error"
+    # Iterate over the stream.
+    for tweet in tweet_iter:
+        # You must test that your tweet has text. It might be a delete
+        # or data message.
+        if tweet.get('text'):
+            tweet = trim_tweet_data([tweet],screen_name,alt_rt_style)
+            client = connect()
+            client.sendall(bytes(str(tweet),"utf-8"))
+            client.close()
 
     return "Stream shut down"
 
