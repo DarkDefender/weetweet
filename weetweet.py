@@ -961,6 +961,16 @@ def oauth_proc_cb(data, command, rc, out, err):
             finish_init()
         elif data == "friends":
             process_output = ast.literal_eval(out)
+            if isinstance(process_output[-1], int):
+                t_id = dict_tweet(str(process_output[-1])) + "\t"
+                process_output = process_output[:-1]
+                weechat.prnt_date_tags(buffer, 0, "no_highlight", t_id +
+                    "It sees like you are following more than 250 people. Due to twitter api limits " +
+                    "it is nearly impossible to get large groups of followers in one go. However the " + 
+                    "nicks will be added when they tweet something so if you don't have to be able " +
+                    "autocomplete them from the start this is not a problem for you." + 
+                    " If you want to get the rest of the nicks you can use the id of this text.")
+
             for nick in process_output:
                 add_to_nicklist(buffer,nick)
             #Get latest tweets from timeline
