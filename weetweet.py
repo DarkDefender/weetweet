@@ -984,7 +984,7 @@ def oauth_proc_cb(data, command, rc, out, err):
     Copy the PIN number that appears on the linked web page and type ":auth <pin>"
     in weechat. For example ":auth 123456"
     """)
-            oauth_url = ('http://api.twitter.com/oauth/authorize?oauth_token=' +
+            oauth_url = ('https://api.twitter.com/oauth/authorize?oauth_token=' +
                      oauth_token)
             weechat.prnt(buffer," Please go here to get your PIN: " + oauth_url)
         elif data == "auth2":
