@@ -97,7 +97,8 @@ command_dict = dict(user="u",replies="r",view_tweet="v",
         followers="fo",about="a",block="b",unblock="ub",
         blocked_users="blocks",favorite="fav",unfavorite="unfav",
         favorites="favs", rate_limits="limits",home_timeline="home",
-        clear_nicks="cnicks",clear_buffer="clear",create_stream="stream")
+        clear_nicks="cnicks",clear_buffer="clear",create_stream="stream",
+	restart_home_stream="re_home")
 desc_dict = dict(
         user="<user>[<id><count>|<id>|<count>], Request user timeline, " +
         "if <id> is given it will get tweets older than <id>, " +
@@ -151,7 +152,9 @@ desc_dict = dict(
         "seperated by a ' & '. To only use keywords just have ' & ' in the "+
         "begininng.\n NOTE: you can only have one stream at a time because "+
         "twitter will IP ban you if you repeatedly request more than one "+
-        "stream.")
+        "stream.",
+	restart_home_stream="Restart the home timeline stream after it has " +
+	"shutdown.")
 
 SCRIPT_NAME = "weetweet"
 SCRIPT_FILE_PATH = os.path.abspath(__file__)
@@ -328,7 +331,8 @@ def twitter_stream_cb(buffer,fd):
         else:
             print_tweet_data(buffer,tweet,"")
     else:
-        weechat.prnt(buffer, "recv stream data: " + str(tweet))
+        weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"),
+		"recv stream data: " + str(tweet)))
     conn.close()
     return weechat.WEECHAT_RC_OK
 
@@ -426,7 +430,7 @@ def twitter_stream(cmd_args):
             client.close()
             stream_end_message = "Unhandled type message"
 
-    return "Stream shut down after: " + stream_end_message
+    return "Stream shut down after: " + stream_end_message + ". You'll have to restart the stream manually."
 
 def stream_close_cb(name,buffer):
     global sock_fd_dict
@@ -867,6 +871,9 @@ def buffer_input_cb(data, buffer, input_data):
         elif command == 'stream':
             args = html_escape(input_data[7:])
             weechat.prnt(buffer,create_stream("t_stream",args))
+            return weechat.WEECHAT_RC_OK
+        elif command == 're_home':
+            weechat.prnt(buffer,create_stream("twitter"))
             return weechat.WEECHAT_RC_OK
         else:
             input_data = input_data[1:]
