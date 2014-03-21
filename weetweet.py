@@ -39,6 +39,7 @@ import socket
 
 weechat_call = True
 import_ok = True
+required_twitter_version = "1.14.1"
 
 try:
     import weechat
@@ -56,6 +57,18 @@ try:
     from twitter import *
 except:
     import_ok = False
+
+try:
+    #Import for version checking
+    from pkg_resources import parse_version, get_distribution
+    version = get_distribution("twitter").version
+    if parse_version(required_twitter_version) > parse_version(version):
+        import_ok = False
+except:
+    if weechat_call:
+        weechat.prnt("", "You need the have pkg_resources installed for version checking")
+    else:
+        print("You need the have pkg_resources installed for version checking")
 
 # These two keys is what identifies this twitter client as "weechat twitter"
 # If you want to change it you can register your own keys at:
@@ -1060,7 +1073,7 @@ if __name__ == "__main__" and weechat_call:
     weechat.register( SCRIPT_NAME , "DarkDefender", "1.1", "GPL3", "Weechat twitter client", "", "")
 
     if not import_ok:
-        weechat.prnt("", "Can't load the python twitter lib!")
+        weechat.prnt("", "Can't load twitter python lib >= " + required_twitter_version)
         weechat.prnt("", "Install it via your package manager or go to http://mike.verdone.ca/twitter/")
     else:
         hook_commands_and_completions()
@@ -1101,5 +1114,5 @@ elif import_ok:
     else:
         print(get_twitter_data(sys.argv))
 else:
-    print("Can't load twitter python lib")
+    print("Can't load twitter python lib >= " + required_twitter_version )
 
