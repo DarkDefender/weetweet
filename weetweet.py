@@ -98,7 +98,7 @@ command_dict = dict(user="u",replies="r",view_tweet="v",
         blocked_users="blocks",favorite="fav",unfavorite="unfav",
         favorites="favs", rate_limits="limits",home_timeline="home",
         clear_nicks="cnicks",clear_buffer="clear",create_stream="stream",
-	restart_home_stream="re_home")
+        restart_home_stream="re_home")
 desc_dict = dict(
         user="<user>[<id><count>|<id>|<count>], Request user timeline, " +
         "if <id> is given it will get tweets older than <id>, " +
@@ -323,9 +323,12 @@ def twitter_stream_cb(buffer,fd):
             print_tweet_data(buffer,tweet,"id")
         else:
             print_tweet_data(buffer,tweet,"")
-    else:
+    elif False:
+        #https://dev.twitter.com/docs/streaming-apis/messages
+        #TODO handle stream events
         weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"),
-		"recv stream data: " + str(tweet)))
+        "recv stream data: " + str(tweet)))
+
     conn.close()
     return weechat.WEECHAT_RC_OK
 
@@ -375,7 +378,7 @@ def twitter_stream(cmd_args):
         args = stream_args.split(" & ")
         stream = TwitterStream(auth=OAuth(
                 oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
-    	    **stream_args)
+            **stream_args)
 
         twitter = Twitter(auth=OAuth(
             oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET))
@@ -447,7 +450,7 @@ def create_stream(name, args = ""):
 
     if proc_hooks.get(name):
         return "Stream has already been created, close it before trying to open a new one"
-    
+
     #Check if buffer exists
     buffer = weechat.buffer_search("python", name)
     if buffer == "":
@@ -458,7 +461,7 @@ def create_stream(name, args = ""):
         file_name = tempfile.gettempdir() + "/we_tw_" + name
         if os.path.exists(file_name):
             os.remove(file_name)
-    
+
         server = socket.socket( socket.AF_UNIX, socket.SOCK_STREAM )
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server.bind(file_name)
@@ -529,7 +532,7 @@ def my_process_cb(data, command, rc, out, err):
                                                                                                process_output['statuses_count']))
             weechat.prnt(buffer, "Are you currently following this person: %s" % (process_output['following']))
             return weechat.WEECHAT_RC_OK
-        
+
         elif end_mes == "Stream":
             #Clean up the stream hooks
             name = weechat.buffer_get_string(buffer, "name")
@@ -553,7 +556,7 @@ def get_twitter_data(cmd_args):
     screen_name = ""
 
     h = html.parser.HTMLParser()
-    
+
     try:
         if cmd_args[-1][0] == "[":
             option_list = ast.literal_eval(cmd_args[-1])
@@ -571,7 +574,7 @@ def get_twitter_data(cmd_args):
 
     oauth_token = cmd_args[1]
     oauth_secret= cmd_args[2]
-    
+
     if cmd_args[3] == "auth":
         twitter = Twitter(
             auth=OAuth(oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
@@ -922,7 +925,7 @@ def hook_commands_and_completions():
 # callback called when buffer is closed
 # TODO rewrite this so it unloads the plugin
 def buffer_close_cb(data, buffer):
-    # ...      
+    # ...
     #TODO handle multiple buffers and free up global buffer pointers
     weechat.unhook_all()
     return weechat.WEECHAT_RC_OK
@@ -957,7 +960,7 @@ def my_modifier_cb(data, modifier, modifier_data, string):
         return string
 
     length = tweet_length(string)
-    
+
     # Subtract local command argument from length
     if string[:3] == ":re":
         #:re a2
@@ -1046,7 +1049,7 @@ def oauth_dance(buffer, pin = ""):
 def setup_buffer(buffer):
     # set title
     weechat.buffer_set(buffer, "title", "Twitter buffer, type ':help' for options.")
-    
+
     # disable logging, by setting local variable "no_log" to "1"
     weechat.buffer_set(buffer, "localvar_set_no_log", "1")
 
@@ -1063,7 +1066,7 @@ def setup_buffer(buffer):
 
     #show nicklist
     weechat.buffer_set(buffer, "nicklist", "1")
-    
+
     user_nick = script_options['screen_name']
 
     weechat.buffer_set(buffer, "localvar_set_nick", user_nick)
@@ -1111,12 +1114,12 @@ if __name__ == "__main__" and weechat_call:
 
         read_config()
         # hook for config changes
-        
+
         weechat.hook_config("plugins.var.python." + SCRIPT_NAME + ".*", "config_cb", "")
-        
+
         # create buffer
         twit_buf = weechat.buffer_new("twitter", "buffer_input_cb", "", "buffer_close_cb", "")
-    
+
         #Hook text input so we can update the bar item
         weechat.hook_modifier("input_text_display", "my_modifier_cb", "")
 
@@ -1127,7 +1130,7 @@ if __name__ == "__main__" and weechat_call:
         else:
             weechat.prnt(twit_buf,"""You have to register this plugin with twitter for it to work.
 Type ":auth" and follow the instructions to do that""")
-             
+
 elif import_ok:
     if sys.argv[3] == "stream":
         print(twitter_stream(sys.argv))
