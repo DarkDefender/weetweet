@@ -317,15 +317,18 @@ def twitter_stream_cb(buffer,fd):
 
     try:
         tweet = ast.literal_eval(tweet)
-        #weechat.prnt(buffer, "recv streamed tweet" + tweet)
     except:
         weechat.prnt(buffer, "Error resv stream message")
         return weechat.WEECHAT_RC_OK
-    if buffer == twit_buf:
-        #Update last recv id
-        print_tweet_data(buffer,tweet,"id")
+    #Is this a text message (normal tweet)?
+    if isinstance(tweet,list):
+        if buffer == twit_buf:
+            #Update last recv id
+            print_tweet_data(buffer,tweet,"id")
+        else:
+            print_tweet_data(buffer,tweet,"")
     else:
-        print_tweet_data(buffer,tweet,"")
+        weechat.prnt(buffer, "recv stream data: " + str(tweet))
     conn.close()
     return weechat.WEECHAT_RC_OK
 
@@ -396,17 +399,34 @@ def twitter_stream(cmd_args):
             track = ",".join(h.unescape(args[1]).split())
             tweet_iter = stream.statuses.filter(track=track)
 
+    stream_end_message = "Unknown reason"
+
     # Iterate over the stream.
     for tweet in tweet_iter:
         # You must test that your tweet has text. It might be a delete
         # or data message.
-        if tweet.get('text'):
+        if tweet is None:
+            stream_end_message = "'None' reply"
+        elif tweet is stream.Timeout:
+            stream_end_message = "Timeout"
+        elif tweet is stream.HeartbeatTimeout:
+            stream_end_message = "Heartbeat Timeout"
+        elif tweet is stream.Hangup:
+            stream_end_message = "Hangup"
+        elif tweet.get('text'):
             tweet = trim_tweet_data([tweet],screen_name,alt_rt_style)
             client = connect()
             client.sendall(bytes(str(tweet),"utf-8"))
             client.close()
+            stream_end_message = "Text message"
+        else:
+            #Got a other type of message
+            client = connect()
+            client.sendall(bytes(str(tweet),"utf-8"))
+            client.close()
+            stream_end_message = "Unhandled type message"
 
-    return "Stream shut down"
+    return "Stream shut down after: " + stream_end_message
 
 def stream_close_cb(name,buffer):
     global sock_fd_dict
