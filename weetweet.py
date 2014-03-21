@@ -362,13 +362,13 @@ def twitter_stream(cmd_args):
 
     # These arguments are optional. But the current code only handles this
     # configuration. So it's defined here if the defaults change.
-    stream_args = dict( timeout=None, block=True, heartbeat_timeout=90 )
+    stream_options = dict( timeout=None, block=True, heartbeat_timeout=90 )
 
     if name == "twitter":
         #home timeline stream
         stream = TwitterStream(auth=OAuth(
                 oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
-                domain="userstream.twitter.com", **stream_args)
+                domain="userstream.twitter.com", **stream_options)
         if home_replies:
             tweet_iter = stream.user(replies="all")
         else:
@@ -378,7 +378,7 @@ def twitter_stream(cmd_args):
         args = stream_args.split(" & ")
         stream = TwitterStream(auth=OAuth(
                 oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
-            **stream_args)
+            **stream_options)
 
         twitter = Twitter(auth=OAuth(
             oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET))
