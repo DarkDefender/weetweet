@@ -235,8 +235,6 @@ def parse_for_nicks(text,buffer):
 
 def print_tweet_data(buffer,tweets,data):
 
-    cur_date = time.strftime("%Y-%m-%d", time.localtime())
-    
     for message in tweets:
         nick = message[1]
         text = message[3]
@@ -258,11 +256,6 @@ def print_tweet_data(buffer,tweets,data):
             temp_text = text
             text = reply_id
             reply_id = temp_text
-
-        mes_date = time.strftime("%Y-%m-%d", time.localtime(message[0]))
-        if cur_date != mes_date:
-            cur_date = mes_date
-            weechat.prnt(buffer, "\t\tDate: " + cur_date)
 
         weechat.prnt_date_tags(buffer, message[0], "notify_message",
                 "%s%s\t%s%s" % (nick, t_id, text,reply_id))
