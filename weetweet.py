@@ -55,6 +55,7 @@ except:
 try:
     #Import python twitter lib
     from twitter import *
+    from twitter.stream import Timeout, HeartbeatTimeout, Hangup
 except:
     import_ok = False
 
@@ -324,7 +325,7 @@ def twitter_stream_cb(buffer,fd):
             print_tweet_data(buffer,tweet,"id")
         else:
             print_tweet_data(buffer,tweet,"")
-    elif False:
+    elif True:
         #https://dev.twitter.com/docs/streaming-apis/messages
         #TODO handle stream events
         weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"),
@@ -408,11 +409,11 @@ def twitter_stream(cmd_args):
         # or data message.
         if tweet is None:
             stream_end_message = "'None' reply"
-        elif tweet is stream.Timeout:
+        elif tweet is Timeout:
             stream_end_message = "Timeout"
-        elif tweet is stream.HeartbeatTimeout:
+        elif tweet is HeartbeatTimeout:
             stream_end_message = "Heartbeat Timeout"
-        elif tweet is stream.Hangup:
+        elif tweet is Hangup:
             stream_end_message = "Hangup"
         elif tweet.get('text'):
             tweet = trim_tweet_data([tweet],screen_name,alt_rt_style)
@@ -433,7 +434,10 @@ def stream_close_cb(name,buffer):
     global sock_fd_dict
     global proc_hooks
     weechat.unhook(sock_hooks[name])
-    weechat.unhook(proc_hooks[name])
+    #Is the process already unhooked?
+    if proc_hooks[name]:
+    	weechat.unhook(proc_hooks[name])
+
     #remove fd key
     for key, value in sock_fd_dict.items():
         if value == name:
@@ -499,8 +503,10 @@ def my_process_cb(data, command, rc, out, err):
         if out[0] != "[" and out[0] != "{":
             #If message is just a string print it
             weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"), out))
-            return weechat.WEECHAT_RC_OK
-        process_output = ast.literal_eval(out)
+            process_output = []
+        else:
+            process_output = ast.literal_eval(out)
+
         #List message
         if len(end_mes) >= 1 and end_mes[0] == "L":
             if isinstance(process_output[-1], int):
@@ -513,6 +519,7 @@ def my_process_cb(data, command, rc, out, err):
 
             for nick in process_output:
                 if end_mes == "LYFollowing":
+                    end_mes = "LYou are following"
                     add_to_nicklist(buffer,nick)
                 elif script_options['tweet_nicks']:
                     add_to_nicklist(buffer,nick,tweet_nicks_group[buffer])
@@ -535,11 +542,15 @@ def my_process_cb(data, command, rc, out, err):
             return weechat.WEECHAT_RC_OK
 
         elif end_mes == "Stream":
+            global proc_hooks
             #Clean up the stream hooks
             name = weechat.buffer_get_string(buffer, "name")
+            #Set the hook to none because it has already been unhooked
+            proc_hooks[name] = None
             stream_close_cb(name, buffer)
             #TODO restart stream correctly
             #create_stream(name)
+            return weechat.WEECHAT_RC_OK
 
         print_tweet_data(buffer,process_output,end_mes)
 
