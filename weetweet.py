@@ -155,8 +155,8 @@ desc_dict = dict(
         "begininng.\n NOTE: you can only have one stream at a time because "+
         "twitter will IP ban you if you repeatedly request more than one "+
         "stream.",
-	restart_home_stream="Restart the home timeline stream after it has " +
-	"shutdown.")
+    restart_home_stream="Restart the home timeline stream after it has " +
+    "shutdown.")
 
 SCRIPT_NAME = "weetweet"
 SCRIPT_FILE_PATH = os.path.abspath(__file__)
@@ -299,6 +299,19 @@ def trim_tweet_data(tweet_data, screen_name, alt_rt_style):
     output.reverse()
     return output
 
+def stream_message(buffer,tweet):
+    if 'delete' in tweet:
+        #Colorize the tweet id
+        arrow_col = weechat.color('chat_prefix_suffix')
+        reset_col = weechat.color('reset')
+        dict_id = dict_tweet(tweet['delete']['status']['id_str'])
+        id_str = arrow_col +  "<" + reset_col + dict_id + arrow_col + "> " + reset_col
+        weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"),
+        "Got request to delete: " + id_str))
+    else:
+        weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"),
+        "recv stream data: " + str(tweet)))
+
 def twitter_stream_cb(buffer,fd):
     #accept connection
     server = sock_fd_dict[sock_fd_dict[fd]]
@@ -328,8 +341,7 @@ def twitter_stream_cb(buffer,fd):
     elif True:
         #https://dev.twitter.com/docs/streaming-apis/messages
         #TODO handle stream events
-        weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"),
-        "recv stream data: " + str(tweet)))
+        stream_message(buffer,tweet)
 
     conn.close()
     return weechat.WEECHAT_RC_OK
@@ -428,7 +440,7 @@ def twitter_stream(cmd_args):
             client.close()
             stream_end_message = "Unhandled type message"
 
-    return "Stream shut down after: " + stream_end_message + ". You'll have to restart the stream manually."
+    return "Stream shut down after: " + stream_end_message + ". You'll have to restart the stream manually. (:re_home, if home stream)"
 
 def stream_close_cb(name,buffer):
     global sock_fd_dict
@@ -436,7 +448,7 @@ def stream_close_cb(name,buffer):
     weechat.unhook(sock_hooks[name])
     #Is the process already unhooked?
     if proc_hooks[name]:
-    	weechat.unhook(proc_hooks[name])
+        weechat.unhook(proc_hooks[name])
 
     #remove fd key
     for key, value in sock_fd_dict.items():
