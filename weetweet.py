@@ -90,7 +90,7 @@ script_options = {
 #TODO have a dict for each buffer
 tweet_dict = {'cur_index': "a0"}
 #Mega command dict
-command_dict = dict(user="u",replies="r",view_tweet="v",thread="th",
+command_dict = dict(user="u",replies="r",view_tweet="v",thread="th",link="l",
         retweet="rt",delete="d",tweet="t",reply="re",new_tweets="new",
         follow_user="follow",unfollow_user="unfollow",following="f",
         followers="fo",about="a",block="b",unblock="ub",
@@ -108,6 +108,7 @@ desc_dict = dict(
         view_tweet="<id>, View/get tweet with <id>",
         thread="<id>, View/get the reply chain of tweets (the thread) where " +
         "<id> is the last tweet in the thread.",
+        link="<id>, Get a link to tweet with <id>",
         retweet="<id>, Retweet <id>",
         delete="<id>, Delete tweet <id>. You can only delete your own tweets...",
         tweet="<text>Tweet the text following this command",
@@ -692,6 +693,11 @@ def get_twitter_data(cmd_args):
                     tweet_id = temp_tweet["in_reply_to_status_id_str"]
                 else:
                     break;
+        elif cmd_args[3] == "l":
+            tweet_data = [twitter.statuses.show._(cmd_args[4])()]
+            output = "Link for tweet: https://twitter.com/{}/status/{}".format(tweet_data[0]['user']['screen_name'],
+                                                                               tweet_data[0]['id_str'])
+            return output
         elif cmd_args[3] == "rt":
             tweet_data = [twitter.statuses.retweet._(cmd_args[4])()]
             #The home stream prints you messages as well...
@@ -851,6 +857,8 @@ def buffer_input_cb(data, buffer, input_data):
         elif command == 'th' and tweet_dict.get(input_args[1]):
             input_data = 'th ' + tweet_dict[input_args[1]]
             end_message = "Done"
+        elif command == 'l' and tweet_dict.get(input_args[1]):
+            input_data = 'l ' + tweet_dict[input_args[1]]
         elif command == 'rt' and tweet_dict.get(input_args[1]):
             end_message = "id"
             input_data = 'rt ' + tweet_dict[input_args[1]]
