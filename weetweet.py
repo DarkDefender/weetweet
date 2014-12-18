@@ -95,7 +95,7 @@ command_dict = dict(user="u",replies="r",view_tweet="v",thread="th",link="l",
         follow_user="follow",unfollow_user="unfollow",following="f",
         followers="fo",about="a",block="b",unblock="ub",
         blocked_users="blocks",favorite="fav",unfavorite="unfav",
-        favorites="favs", rate_limits="limits",home_timeline="home",
+        favorites="favs",fav_retweet="fart",rate_limits="limits",home_timeline="home",
         clear_nicks="cnicks",clear_buffer="clear",create_stream="stream",
         restart_home_stream="re_home")
 desc_dict = dict(
@@ -137,6 +137,7 @@ desc_dict = dict(
         "if <user> is not given get your own favs. " +
         "If <id> is given it will get tweets older than <id>, " +
         "<count> is how many tweets to get, valid number is 1-200",
+        fav_retweet="<id>, favorites and retweets <id>",
         rate_limits="[|<sub_group>], get the current status of the twitter " +
         "api limits. It prints how much you have left/used. " +
         " if <sub_group> is supplied it will only get/print that sub_group.",
@@ -790,6 +791,10 @@ def get_twitter_data(cmd_args):
                 tweet_data = twitter.favorites.list(**kwargs)
             else:
                 tweet_data = twitter.favorites.list()
+        elif cmd_args[3] == "fart":
+            twitter.favorites.create(_id=cmd_args[4])
+            tweet_data = [twitter.statuses.retweet._(cmd_args[4])()]
+            tweet_data = []
         elif cmd_args[3] == "limits":
             output = ""
             if len(cmd_args) >= 5:
@@ -944,6 +949,10 @@ def buffer_input_cb(data, buffer, input_data):
         elif command == 'unfav' and tweet_dict.get(input_args[1]):
             input_data = 'unfav ' + tweet_dict[input_args[1]]
             weechat.prnt(buffer, "%sYou unfave'd the following tweet:" % weechat.prefix("network"))
+        elif command == 'fart' and tweet_dict.get(input_args[1]):
+            end_message = "id"
+            input_data = 'fart ' + tweet_dict[input_args[1]]
+            weechat.prnt(buffer, "%sYou fave'd and retweeted the following tweet:" % weechat.prefix("network"))
         elif command == 'cnicks':
             global tweet_nicks_group
             if tweet_nicks_group[buffer] != "":
