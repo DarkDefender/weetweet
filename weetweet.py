@@ -437,6 +437,8 @@ def twitter_stream(cmd_args):
                 client.sendall(bytes(str(tweet),"utf-8"))
                 client.close()
                 stream_end_message = "Text message"
+                # Reset the reconnect timer when we get a new message
+                re_timer = 1
             else:
                 #Got a other type of message
                 client = connect()
