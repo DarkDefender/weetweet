@@ -93,7 +93,7 @@ script_options = {
 #TODO have a dict for each buffer
 tweet_dict = {'cur_index': "a0"}
 #Mega command dict
-command_dict = dict(user="u",replies="r",view_tweet="v",
+command_dict = dict(user="u",replies="r",view_tweet="v",thread="th",
         retweet="rt",delete="d",tweet="t",reply="re",new_tweets="new",
         follow_user="follow",unfollow_user="unfollow",following="f",
         followers="fo",about="a",block="b",unblock="ub",
@@ -109,6 +109,8 @@ desc_dict = dict(
         "if <id> is given it will get tweets older than <id>, " +
         "<count> is how many tweets to get, valid number is 1-200",
         view_tweet="<id>, View/get tweet with <id>",
+        thread="<id>, View/get the reply chain of tweets (the thread) where " +
+        "<id> is the last tweet in the thread.",
         retweet="<id>, Retweet <id>",
         delete="<id>, Delete tweet <id>. You can only delete your own tweets...",
         tweet="<text>Tweet the text following this command",
@@ -657,6 +659,20 @@ def get_twitter_data(cmd_args):
                 tweet_data = twitter.statuses.mentions_timeline()
         elif cmd_args[3] == "v":
             tweet_data = [twitter.statuses.show._(cmd_args[4])()]
+        elif cmd_args[3] == "th":
+            #only fetch up to 20 tweets in one go
+            tweets_left = 0
+            tweet_id = cmd_args[4]
+            tweet_data = []
+            while tweets_left < 20:
+                tweets_left += 1
+                #TODO handle deleted tweets
+                temp_tweet = twitter.statuses.show._(tweet_id)()
+                tweet_data.append(temp_tweet)
+                if temp_tweet["in_reply_to_status_id_str"] != None:
+                    tweet_id = temp_tweet["in_reply_to_status_id_str"]
+                else:
+                    break;
         elif cmd_args[3] == "rt":
             tweet_data = [twitter.statuses.retweet._(cmd_args[4])()]
             #The home stream prints you messages as well...
@@ -805,6 +821,9 @@ def buffer_input_cb(data, buffer, input_data):
             weechat.prnt(buffer, "%sYou deleted the following tweet:" % weechat.prefix("network"))
         elif command == 'v' and tweet_dict.get(input_args[1]):
             input_data = 'v ' + tweet_dict[input_args[1]]
+            end_message = "Done"
+        elif command == 'th' and tweet_dict.get(input_args[1]):
+            input_data = 'th ' + tweet_dict[input_args[1]]
             end_message = "Done"
         elif command == 'rt' and tweet_dict.get(input_args[1]):
             end_message = "id"
