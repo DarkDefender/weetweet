@@ -279,12 +279,16 @@ def trim_tweet_data(tweet_data, screen_name, alt_rt_style):
 
     output = []
     for message in tweet_data:
-        if alt_rt_style and message.get('retweeted_status'):
-            if message['user']['screen_name'] == screen_name:
-                #escape highlighting
-                message['user']['screen_name'] = "<you>"
-            message['text'] = message['retweeted_status']['text'] + " (retweeted by " + message['user']['screen_name'] + ")"
-            message['user'] = message['retweeted_status']['user']
+        if message.get('retweeted_status'):
+            if alt_rt_style:
+                if message['user']['screen_name'] == screen_name:
+                    #escape highlighting
+                    message['user']['screen_name'] = "<you>"
+                message['text'] = message['retweeted_status']['text'] + " (retweeted by " + message['user']['screen_name'] + ")"
+                message['user'] = message['retweeted_status']['user']
+            else:
+                message['text'] = "RT @{}: {}".format(message['retweeted_status']['user']['screen_name'],
+                                                      message['retweeted_status']['text'])
         mes_list = [calendar.timegm(time.strptime(message['created_at'],'%a %b %d %H:%M:%S +0000 %Y')),
             message['user']['screen_name'],
             message['id_str'],
