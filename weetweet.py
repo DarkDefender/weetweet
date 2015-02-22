@@ -384,40 +384,44 @@ def twitter_stream(cmd_args):
     re_timer = 1
 
     while re_timer:
-        if name == "twitter":
-            #home timeline stream
-            stream = TwitterStream(auth=OAuth(
-                    oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
-                    domain="userstream.twitter.com", **stream_options)
-            if home_replies:
-                tweet_iter = stream.user(replies="all")
-            else:
-                tweet_iter = stream.user()
-        else:
-            h = html.parser.HTMLParser() 
-            args = stream_args.split(" & ")
-            stream = TwitterStream(auth=OAuth(
-                    oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
-                **stream_options)
-
-            twitter = Twitter(auth=OAuth(
-                oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET))
-
-            if args[0] != "":
-                follow = ",".join(h.unescape(args[0]).split())
-                twitter_data = twitter.users.lookup(screen_name=follow)
-                follow_ids = ""
-                for user in twitter_data:
-                    follow_ids += user['id_str'] + ","
-                follow_ids = follow_ids[:-1]
-                if len(args) == 2 and args[1] != "":
-                    track = ",".join(h.unescape(args[1]).split())
-                    tweet_iter = stream.statuses.filter(track=track,follow=follow_ids)
+        try:
+            if name == "twitter":
+                #home timeline stream
+                stream = TwitterStream(auth=OAuth(
+                        oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
+                        domain="userstream.twitter.com", **stream_options)
+                if home_replies:
+                    tweet_iter = stream.user(replies="all")
                 else:
-                    tweet_iter = stream.statuses.filter(follow=follow_ids)
+                    tweet_iter = stream.user()
             else:
-                track = ",".join(h.unescape(args[1]).split())
-                tweet_iter = stream.statuses.filter(track=track)
+                h = html.parser.HTMLParser() 
+                args = stream_args.split(" & ")
+                stream = TwitterStream(auth=OAuth(
+                        oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
+                    **stream_options)
+
+                twitter = Twitter(auth=OAuth(
+                    oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET))
+
+                if args[0] != "":
+                    follow = ",".join(h.unescape(args[0]).split())
+                    twitter_data = twitter.users.lookup(screen_name=follow)
+                    follow_ids = ""
+                    for user in twitter_data:
+                        follow_ids += user['id_str'] + ","
+                    follow_ids = follow_ids[:-1]
+                    if len(args) == 2 and args[1] != "":
+                        track = ",".join(h.unescape(args[1]).split())
+                        tweet_iter = stream.statuses.filter(track=track,follow=follow_ids)
+                    else:
+                        tweet_iter = stream.statuses.filter(follow=follow_ids)
+                else:
+                    track = ",".join(h.unescape(args[1]).split())
+                    tweet_iter = stream.statuses.filter(track=track)
+        except:
+            stream_end_message = "Connection problem (could not connect to twitter)"
+            break;
 
         stream_end_message = "Unknown reason"
 
