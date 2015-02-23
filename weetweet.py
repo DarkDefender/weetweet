@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-# 
+#
 
 import sys
 import ast
@@ -154,8 +154,8 @@ desc_dict = dict(
         "begininng.\n NOTE: you can only have one stream at a time because "+
         "twitter will IP ban you if you repeatedly request more than one "+
         "stream.",
-    restart_home_stream="Restart the home timeline stream after it has " +
-    "shutdown.")
+        restart_home_stream="Restart the home timeline stream after it has " +
+        "shutdown.")
 
 SCRIPT_NAME = "weetweet"
 SCRIPT_FILE_PATH = os.path.abspath(__file__)
@@ -391,7 +391,7 @@ def twitter_stream(cmd_args):
                 else:
                     tweet_iter = stream.user()
             else:
-                h = html.parser.HTMLParser() 
+                h = html.parser.HTMLParser()
                 args = stream_args.split(" & ")
                 stream = TwitterStream(auth=OAuth(
                         oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
@@ -447,7 +447,7 @@ def twitter_stream(cmd_args):
                 client.sendall(bytes(str(tweet),"utf-8"))
                 client.close()
                 stream_end_message = "Unhandled type message"
-        
+
         client = connect()
         client.sendall(bytes('"Disconnected, trying to reconnect."',"utf-8"))
         client.close()
@@ -525,7 +525,7 @@ def my_process_cb(data, command, rc, out, err):
                 command.replace(script_options["oauth_token"],"").replace(script_options["oauth_secret"],""))
         return weechat.WEECHAT_RC_OK
 
-    data = ast.literal_eval(data) 
+    data = ast.literal_eval(data)
     buffer = data[0]
     end_mes = data[1]
 
@@ -700,7 +700,7 @@ def get_twitter_data(cmd_args):
                 return "No new tweets available."
         elif cmd_args[3] == "follow":
             tweet_data = []
-            twitter.friendships.create(screen_name = cmd_args[4]) 
+            twitter.friendships.create(screen_name = cmd_args[4])
         elif cmd_args[3] == "unfollow":
             tweet_data = []
             twitter.friendships.destroy(screen_name = cmd_args[4])
@@ -733,12 +733,12 @@ def get_twitter_data(cmd_args):
             return twitter.users.show(screen_name = cmd_args[4])
         elif cmd_args[3] == "b":
             tweet_data = []
-            twitter.blocks.create(screen_name = cmd_args[4]) 
+            twitter.blocks.create(screen_name = cmd_args[4])
         elif cmd_args[3] == "ub":
             tweet_data = []
-            twitter.blocks.destroy(screen_name = cmd_args[4]) 
+            twitter.blocks.destroy(screen_name = cmd_args[4])
         elif cmd_args[3] == "blocks":
-            tweet_data = twitter.blocks.list(skip_status = True) 
+            tweet_data = twitter.blocks.list(skip_status = True)
             block_list = list()
             for user in tweet_data['users']:
                 block_list.append(user['screen_name'])
@@ -793,7 +793,7 @@ def get_twitter_data(cmd_args):
         else:
             return "Invalid command: " + cmd_args[3]
     except:
-        return "Unexpected error in get_twitter_data:%s\n Call: %s" % (sys.exc_info(), cmd_args[3]) 
+        return "Unexpected error in get_twitter_data:%s\n Call: %s" % (sys.exc_info(), cmd_args[3])
 
     return trim_tweet_data(tweet_data,screen_name,alt_rt_style)
 
@@ -1068,9 +1068,9 @@ def oauth_proc_cb(data, command, rc, out, err):
                 process_output = process_output[:-1]
                 weechat.prnt_date_tags(buffer, 0, "no_highlight", t_id +
                     "It seems like you are following more than 250 people. Due to twitter api limits " +
-                    "it is nearly impossible to get large groups of followers in one go. However the " + 
+                    "it is nearly impossible to get large groups of followers in one go. However the " +
                     "nicks will be added when they tweet something so if you don't have to be able " +
-                    "autocomplete them from the start this is not a problem for you." + 
+                    "autocomplete them from the start this is not a problem for you." +
                     " If you want to get the rest of the nicks you can use the id of this text.")
 
             for nick in process_output:
@@ -1174,7 +1174,7 @@ if __name__ == "__main__" and weechat_call:
                         default_value = "on"
                     else:
                         default_value = "off"
-                weechat.config_set_plugin(option, default_value) 
+                weechat.config_set_plugin(option, default_value)
 
         read_config()
         # hook for config changes
