@@ -49,24 +49,11 @@ except:
         exit(0)
     weechat_call = False
 
-try:
-    #Import python twitter lib
-    from twitter import *
-    from twitter.stream import Timeout, HeartbeatTimeout, Hangup
-except:
-    import_ok = False
+import_ok = False
 
-try:
-    #Import for version checking
-    from pkg_resources import parse_version, get_distribution
-    version = get_distribution("twitter").version
-    if parse_version(required_twitter_version) > parse_version(version):
-        import_ok = False
-except:
-    if weechat_call:
-        weechat.prnt("", "You need the have pkg_resources installed for version checking")
-    else:
-        print("You need the have pkg_resources installed for version checking")
+# tweet test string
+
+test_str = str([[1424642392, 'notch', '569617596343062529', b'@jonathanavt @UltimaN3rd yes, by applying a fisheye lens effect. This is sort of what the oculus rift actually does.', '569617346152796161'], [1424642484, 'notch', '569617981124304896', b'@rdb1191998 no no no no no no no no no no none of that makes any sense', '569617830297112576'], [1424643042, 'notch', '569620323353694208', b"I'd love to use a curved monitor for game development and web browsing, though. That's 2d content, and doesn't get as distorted."], [1424643080, 'notch', '569620479490826240', b'Oh, sorry about the twitter spam, but yes this is really how I vacation. :D Arguing about display shapes on twitter.'], [1424643120, 'notch', '569620647682416640', b'@Lauinator And all 3d content is projected onto the same plane, with the edges further away. Curving WILL distort that.', '569620550361976832'], [1424643147, 'notch', '569620762858020865', b"@snakeapede I'd rather not say, came up with an interesting game idea that I'm trying to prototype in between laziness.", '569620644863741952'], [1424643188, 'notch', '569620934904188929', b"@Raticide I'd hate that. I need everyday normal stuff to enjoy the time I do special stuff.", '569620583492636672'], [1424643361, 'notch', '569621660774617088', b'@Lauinator imagine holding out a piece of flat glass and looking through it. Take a snapshot of what you see through the glass.', '569621074146668546'], [1424643371, 'notch', '569621702407290880', b"@Lauinator that's how 3d graphics are computed, and how cameras work.", '569621074146668546'], [1424643401, 'notch', '569621826105683969', b'@Lauinator to display it, you want to hold out the now non-transparent glass with an image at the same distance. And it needs to be dlat.', '569621074146668546'], [1424643405, 'notch', '569621845546274817', b'@Lauinator *flat', '569621074146668546'], [1424643539, 'notch', '569622408421896192', b"@CaptainBinky I'd probably buy a monitor like that just to annoy people.", '569620831044833280'], [1424643667, 'notch', '569622943761866752', b'@dtc781 oh yes, haha', '569622357876346882'], [1424643683, 'notch', '569623011319533569', b'@VerifiedNutcase noooope', '569622910362632192'], [1424643921, 'notch', '569624010222411776', b'@CraftMeBacon oh god no', '569623900495028225'], [1424643973, 'notch', '569624227860652032', b'You probably all buy gold plated HDMI cables and the new Sony SD card with better sound qualities as well.'], [1424644896, 'notch', '569628097483558913', b'@_tomcc hah', '569628047567159296'], [1424696728, 'notch', '569845496669474816', b'@Zedd whoooaaa, nice!', '569741595324477440'], [1424696809, 'notch', '569845838081609728', b'@DiazAjay i made it for myself, and no.', '569834220396392449'], [1424699714, 'notch', '569858021968519168', b"@locust9 it's like she never left the house!", '569856986818465792']])
 
 # These two keys is what identifies this twitter client as "weechat twitter"
 # If you want to change it you can register your own keys at:
@@ -1133,7 +1120,7 @@ def setup_buffer(buffer):
     #show nicklist
     weechat.buffer_set(buffer, "nicklist", "1")
 
-    user_nick = script_options['screen_name']
+    user_nick = "Test_Nick"
 
     weechat.buffer_set(buffer, "localvar_set_nick", user_nick)
 
@@ -1159,41 +1146,34 @@ def finish_init():
 if __name__ == "__main__" and weechat_call:
     weechat.register( SCRIPT_NAME , "DarkDefender", "1.2.2", "GPL3", "Weechat twitter client", "", "")
 
-    if not import_ok:
-        weechat.prnt("", "Can't load twitter python lib >= " + required_twitter_version)
-        weechat.prnt("", "Install it via your package manager or go to http://mike.verdone.ca/twitter/")
-    else:
-        hook_commands_and_completions()
+    hook_commands_and_completions()
 
-        # Set register script options if not available
+    # Set register script options if not available
 
-        for option, default_value in script_options.items():
-            if not weechat.config_is_set_plugin(option):
-                if isinstance(default_value,bool):
-                    if default_value:
-                        default_value = "on"
-                    else:
-                        default_value = "off"
-                weechat.config_set_plugin(option, default_value)
+    for option, default_value in script_options.items():
+        if not weechat.config_is_set_plugin(option):
+            if isinstance(default_value,bool):
+                if default_value:
+                    default_value = "on"
+                else:
+                    default_value = "off"
+            weechat.config_set_plugin(option, default_value)
 
-        read_config()
-        # hook for config changes
+    read_config()
+    # hook for config changes
 
-        weechat.hook_config("plugins.var.python." + SCRIPT_NAME + ".*", "config_cb", "")
+    weechat.hook_config("plugins.var.python." + SCRIPT_NAME + ".*", "config_cb", "")
 
-        # create buffer
-        twit_buf = weechat.buffer_new("twitter", "buffer_input_cb", "", "buffer_close_cb", "")
+    # create buffer
+    twit_buf = weechat.buffer_new("twitter", "buffer_input_cb", "", "buffer_close_cb", "")
 
-        #Hook text input so we can update the bar item
-        weechat.hook_modifier("input_text_display", "my_modifier_cb", "")
+    #Hook text input so we can update the bar item
+    weechat.hook_modifier("input_text_display", "my_modifier_cb", "")
 
-        if script_options['auth_complete']:
-            finish_init()
-            #create home_timeline stream
-            create_stream("twitter")
-        else:
-            weechat.prnt(twit_buf,"""You have to register this plugin with twitter for it to work.
-Type ":auth" and follow the instructions to do that""")
+    setup_buffer(twit_buf);
+
+    my_process_cb(str([twit_buf, "Done"]), "happ", "", test_str, "")
+    
 
 elif import_ok:
     if sys.argv[3] == "stream":
