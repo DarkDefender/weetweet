@@ -164,7 +164,6 @@ SCRIPT_NAME = "weetweet"
 SCRIPT_FILE_PATH = os.path.abspath(__file__)
 
 twit_buf = ""
-timer_hook = ""
 sock_hooks = {}
 proc_hooks = {}
 sock_fd_dict = {}
@@ -622,17 +621,17 @@ def get_twitter_data(cmd_args):
     oauth_token = cmd_args[1]
     oauth_secret= cmd_args[2]
 
-    #TODO handle auth connection problems
-    if cmd_args[3] == "auth":
-        twitter = Twitter(
-            auth=OAuth(oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
-            format='', api_version=None)
-        if len(cmd_args) == 5:
-            #pin
-            return twitter.oauth.access_token(oauth_verifier=cmd_args[4])
-        else:
-            return twitter.oauth.request_token()
     try:
+        if cmd_args[3] == "auth":
+            twitter = Twitter(
+                auth=OAuth(oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
+                format='', api_version=None)
+            if len(cmd_args) == 5:
+                #pin
+                return twitter.oauth.access_token(oauth_verifier=cmd_args[4])
+            else:
+                return twitter.oauth.request_token()
+
         twitter = Twitter(auth=OAuth(
             oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET))
 
@@ -1056,6 +1055,12 @@ def oauth_proc_cb(data, command, rc, out, err):
                 command.replace(script_options["oauth_token"],"").replace(script_options["oauth_secret"],""))
         return weechat.WEECHAT_RC_OK
 
+    if len(out) > 16 and out[:16] == "Unexpected error":
+        #Auth command failed (most likely connection problems)
+        weechat.prnt("", out);
+        weechat.prnt(buffer, "An error occured, check root buffer. Most likely a connection problem, fix it and the reload weetweet");
+        return weechat.WEECHAT_RC_OK
+
     if out != "":
         if data == "nick":
             weechat.config_set_plugin('screen_name', out.strip())
@@ -1066,7 +1071,7 @@ def oauth_proc_cb(data, command, rc, out, err):
                 t_id = dict_tweet(str(process_output[-1])) + "\t"
                 process_output = process_output[:-1]
                 weechat.prnt_date_tags(buffer, 0, "no_highlight", t_id +
-                    "It sees like you are following more than 250 people. Due to twitter api limits " +
+                    "It seems like you are following more than 250 people. Due to twitter api limits " +
                     "it is nearly impossible to get large groups of followers in one go. However the " + 
                     "nicks will be added when they tweet something so if you don't have to be able " +
                     "autocomplete them from the start this is not a problem for you." + 
@@ -1075,7 +1080,7 @@ def oauth_proc_cb(data, command, rc, out, err):
             for nick in process_output:
                 add_to_nicklist(buffer,nick)
             #Get latest tweets from timeline
-            buffer_input_cb("silent", buffer, ":new")
+            my_command_cb("silent", buffer, "new")
         elif data == "auth1":
             #First auth step to request pin code
             oauth_token, oauth_token_secret = parse_oauth_tokens(out)
@@ -1141,8 +1146,6 @@ def setup_buffer(buffer):
     weechat.buffer_set(buffer, "highlight_words", user_nick)
 
 def finish_init():
-    global timer_hook
-
     buffer = twit_buf
 
     if script_options['screen_name'] == "":
