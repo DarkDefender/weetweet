@@ -25,9 +25,6 @@ import time
 import calendar
 import socket
 
-# TODO:
-# Add desc for script options
-
 # This twitter plugin can be extended even more. Just look at the twitter api
 # doc here: https://dev.twitter.com/docs/api/1.1
 
@@ -459,7 +456,6 @@ def twitter_stream(cmd_args):
             re_timer = 0
         else:
             time.sleep(re_timer)
-            #TODO reset this to 1 when reconnected
             re_timer += 4
 
     return "Stream shut down after: " + stream_end_message + ". You'll have to restart the stream manually. (:re_home, if home stream)"
@@ -1161,7 +1157,7 @@ def finish_init():
            "f " + script_options['screen_name'] + " []", 10 * 1000, "oauth_proc_cb", "friends")
 
 if __name__ == "__main__" and weechat_call:
-    weechat.register( SCRIPT_NAME , "DarkDefender", "1.2.1", "GPL3", "Weechat twitter client", "", "")
+    weechat.register( SCRIPT_NAME , "DarkDefender", "1.2.2", "GPL3", "Weechat twitter client", "", "")
 
     if not import_ok:
         weechat.prnt("", "Can't load twitter python lib >= " + required_twitter_version)
