@@ -306,6 +306,17 @@ def stream_message(buffer,tweet):
         id_str = arrow_col +  "<" + reset_col + dict_id + arrow_col + "> " + reset_col
         weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"),
         "Got request to delete: " + id_str))
+    elif 'event' in tweet:
+        event_str = tweet['event']
+
+        if event_str[-1] == "e":
+            event_str += "d"
+        elif event_str[-1] != "d":
+            event_str += "ed"
+
+        #TODO make the event printing better
+        weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"),
+        tweet['source']['screen_name'] + " " + event_str + " " + tweet['target']['screen_name']))
     else:
         weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"),
         "recv stream data: " + str(tweet)))
@@ -327,7 +338,7 @@ def twitter_stream_cb(buffer,fd):
     try:
         tweet = ast.literal_eval(tweet)
     except:
-        weechat.prnt(buffer, "Error resv stream message")
+        weechat.prnt(buffer, "Error recv stream message")
         return weechat.WEECHAT_RC_OK
     #Is this a text message (normal tweet)?
     if isinstance(tweet,list):
