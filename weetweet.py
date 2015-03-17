@@ -314,9 +314,18 @@ def stream_message(buffer,tweet):
         elif event_str[-1] != "d":
             event_str += "ed"
 
+        extra_str = ""
+
+        if 'target_object' in tweet:
+            if 'id_str' in tweet['target_object']:
+                arrow_col = weechat.color('chat_prefix_suffix')
+                reset_col = weechat.color('reset')
+                dict_id = dict_tweet(tweet['target_object']['id_str'])
+                extra_str = "'s tweet " + arrow_col +  "<" + reset_col + dict_id + arrow_col + "> " + reset_col
+
         #TODO make the event printing better
         weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"),
-        tweet['source']['screen_name'] + " " + event_str + " " + tweet['target']['screen_name']))
+        tweet['source']['screen_name'] + " " + event_str + " " + tweet['target']['screen_name'] + extra_str))
     else:
         weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"),
         "recv stream data: " + str(tweet)))
