@@ -812,6 +812,13 @@ def get_twitter_data(cmd_args):
                 tweet_data = twitter.statuses.home_timeline(exclude_replies = no_home_replies)
         else:
             return "Invalid command: " + cmd_args[3]
+    except TwitterHTTPError as err:
+        #See if we can print a pretty error message first
+        data = err.response_data
+        if "errors" in data and "message" in data["errors"][0]:
+            return "Error: " + data["errors"][0]["message"]
+        else:
+            return "Unexpected error in get_twitter_data:%s\n Call: %s" % (sys.exc_info(), cmd_args[3])
     except:
         return "Unexpected error in get_twitter_data:%s\n Call: %s" % (sys.exc_info(), cmd_args[3])
 
