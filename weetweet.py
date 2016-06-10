@@ -64,9 +64,9 @@ try:
         import_ok = False
 except:
     if weechat_call:
-        weechat.prnt("", "You need the have pkg_resources installed for version checking")
+        weechat.prnt("", "You need to have pkg_resources installed for version checking")
     else:
-        print("You need the have pkg_resources installed for version checking")
+        print("You need to have pkg_resources installed for version checking")
 
 # These two keys is what identifies this twitter client as "weechat twitter"
 # If you want to change it you can register your own keys at:
