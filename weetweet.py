@@ -330,8 +330,8 @@ def stream_message(buffer,tweet):
                 extra_str = "'s tweet " + arrow_col +  "<" + reset_col + dict_id + arrow_col + "> " + reset_col
 
         #TODO make the event printing better
-        weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"),
-        tweet['source']['screen_name'] + " " + event_str + " " + tweet['target']['screen_name'] + extra_str))
+        weechat.prnt_date_tags(buffer, 0, "no_highlight", "%s%s" % (weechat.prefix("network"),
+            tweet['source']['screen_name'] + " " + event_str + " " + tweet['target']['screen_name'] + extra_str))
     else:
         weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"),
         "recv stream data: " + str(tweet)))
