@@ -235,12 +235,8 @@ def remove_from_nicklist(buf, nick, group=""):
 def parse_for_nicks(text,buffer):
     #Parse text for twitter nicks and add them to nicklist
     regex = re.compile(r'@([A-Za-z0-9_]+)')
-    reset = weechat.color('reset')
-    for word in text.split():
-        match = re.search(regex,word)
-        if str(type(match)) == "<type '_sre.SRE_Match'>":
-            nick = word[match.start(1):match.end(0)]
-            add_to_nicklist(buffer,nick,tweet_nicks_group[buffer])
+    for nick in regex.findall(text):
+        add_to_nicklist(buffer,nick,tweet_nicks_group[buffer])
 
 def print_tweet_data(buffer,tweets,data):
 
