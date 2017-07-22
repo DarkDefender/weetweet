@@ -24,6 +24,7 @@ import tempfile
 import time
 import calendar
 import socket
+import getpass
 
 # This twitter plugin can be extended even more. Just look at the twitter api
 # doc here: https://dev.twitter.com/docs/api/1.1
@@ -558,7 +559,7 @@ def create_stream(name, args = ""):
         setup_buffer(buffer)
 
     if not sock_fd_dict.get(name):
-        file_name = tempfile.gettempdir() + "/we_tw_" + name
+        file_name = tempfile.gettempdir() + "/we_tw_" + getpass.getuser() + "_" + name
         if os.path.exists(file_name):
             os.remove(file_name)
 
