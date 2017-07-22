@@ -559,7 +559,7 @@ def create_stream(name, args = ""):
         setup_buffer(buffer)
 
     if not sock_fd_dict.get(name):
-        file_name = tempfile.gettempdir() + "/we_tw_" + getpass.getuser() + + name
+        file_name = tempfile.gettempdir() + "/we_tw_" + getpass.getuser() + "_" + name
         if os.path.exists(file_name):
             os.remove(file_name)
 
