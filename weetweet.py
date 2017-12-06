@@ -348,7 +348,13 @@ def stream_message(buffer,tweet):
         weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"),
         "recv stream data: " + str(tweet)))
 
-def twitter_stream_cb(buffer,fd):
+def twitter_stream_cb(data,fd):
+
+    #TODO this is temporary fix for weechat 2.0
+    data = ast.literal_eval(data)
+    
+    buffer = data[0]
+    fd = data[1]
 
     #accept connection
     server = sock_fd_dict[sock_fd_dict[fd]]
@@ -577,7 +583,7 @@ def create_stream(name, args = ""):
         file_fd = server.fileno()
         sock_fd_dict[str(file_fd)] = name
         sock_fd_dict[name] = server
-        sock_hooks[name] = weechat.hook_fd(file_fd, 1, 0, 0, "twitter_stream_cb", buffer)
+        sock_hooks[name] = weechat.hook_fd(file_fd, 1, 0, 0, "twitter_stream_cb", str([buffer,str(file_fd)]))
 
     proc_hooks[name] = weechat.hook_process("python3 " + SCRIPT_FILE_PATH + " " +
                 "stream " + file_name + " " + args,  0 , "my_process_cb", str([buffer,"Stream"]))
