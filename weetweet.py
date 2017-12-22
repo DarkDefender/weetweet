@@ -120,7 +120,7 @@ desc_dict = dict(
         "of the user that you reply to in the tweet text. If this is not " +
         "the case this will be treated like a normal tweet instead.",
         new_tweets="Get new tweets from your home_timeline. This is only " +
-        "useful if you have disabled the auto updater",
+        "useful if you have disconnected from the home twitter stream",
         follow_user="<user>, Add user to people you follow",
         unfollow_user="<user>, Remove user for people you follow",
         following="[|<id>|<user>|<user> <id>], Show 'friends' of <user> or " +
@@ -351,7 +351,7 @@ def stream_message(buffer,tweet):
 def twitter_stream_cb(buffer,fd):
 
     #accept connection
-    server = sock_fd_dict[sock_fd_dict[fd]]
+    server = sock_fd_dict[ sock_fd_dict[str(fd)] ]
     conn, addr = server.accept()
     tweet = ""
     data = True
@@ -378,7 +378,7 @@ def twitter_stream_cb(buffer,fd):
         #We need to send over the stream options
 
         options = dict(screen_name = script_options['screen_name'],
-                name = sock_fd_dict[fd],
+                name = sock_fd_dict[str(fd)],
                 alt_rt_style = int(script_options['alt_rt_style']),
                 home_replies = int(script_options['home_replies']),
                 token = script_options["oauth_token"],
