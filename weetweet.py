@@ -744,7 +744,7 @@ def get_twitter_data(cmd_args):
         if cmd_args[3] == "auth":
             twitter = Twitter(
                 auth=OAuth(oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
-                format='', api_version='1.1', domain='api.twitter.com')
+                format='', api_version=None)
             if len(cmd_args) == 5:
                 #pin
                 return twitter.oauth.access_token(oauth_verifier=cmd_args[4])
