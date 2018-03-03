@@ -1001,7 +1001,6 @@ def buffer_input_cb(data, buffer, input_data):
                 input_data = 'new ' + script_options['last_id']
             else:
                 input_data = 'home'
-            input_data = input_data + ', tweet_mode="extended"'
         elif command == 'home' or command == 'r' or (
                 command == 'favs' and len(input_args) >= 2 and input_args[1].isdigit()):
             input_data = command
