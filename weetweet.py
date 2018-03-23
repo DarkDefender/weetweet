@@ -844,8 +844,7 @@ def get_twitter_data(cmd_args):
                 kwargs = dict(screen_name=cmd_args[4], stringify_ids=True,
                               cursor=int(cmd_args[5]), count=250)
             else:
-                kwargs = dict(screen_name=cmd_args[4], stringify_ids=True, cursor=-1,
-                              count=250, tweet_mode='extended')
+                kwargs = dict(screen_name=cmd_args[4], stringify_ids=True, cursor=-1, count=250)
             if cmd_args[3] == "f":
                 tweet_data = twitter.friends.ids(**kwargs)
             else:
@@ -967,7 +966,6 @@ def buffer_input_cb(data, buffer, input_data):
         options.append("home_replies")
     if is_py3:
         options.append("is_py3")
-    options.append('tweet_mode="extended"')
 
     if input_data[0] == ':':
         if data != "silent":
@@ -1001,7 +999,6 @@ def buffer_input_cb(data, buffer, input_data):
                 input_data = 'new ' + script_options['last_id']
             else:
                 input_data = 'home'
-            input_data = input_data + ', tweet_mode="extended"'
         elif command == 'home' or command == 'r' or (
                 command == 'favs' and len(input_args) >= 2 and input_args[1].isdigit()):
             input_data = command
@@ -1101,12 +1098,10 @@ def buffer_input_cb(data, buffer, input_data):
             return weechat.WEECHAT_RC_OK
         elif command == 'stream':
             args = html_escape(input_data[7:])
-            #args.append("tweet_mode='extended'")
             weechat.prnt(buffer, create_stream("t_stream", args))
             return weechat.WEECHAT_RC_OK
         elif command == 're_home':
-            #args = str(["tweet_mode='extended'"])
-            weechat.prnt(buffer, create_stream("twitter", args))
+            weechat.prnt(buffer, create_stream("twitter"))
             return weechat.WEECHAT_RC_OK
         else:
             input_data = input_data[1:]
