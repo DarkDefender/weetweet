@@ -331,6 +331,7 @@ def trim_tweet_data(tweet_data, screen_name, alt_rt_style, is_py3):
     return output
 
 def stream_message(buffer, tweet):
+    #TODO because we can not use userstreams anymore, this code will probably never be called
     if 'delete' in tweet:
         # Only show the 'Got request to delete' dialog if it didn't come from us
         #Colorize the tweet id
@@ -412,6 +413,7 @@ def twitter_stream_cb(buffer, fd):
                        home_replies=int(script_options['home_replies']),
                        token=script_options["oauth_token"],
                        secret=script_options["oauth_secret"],
+                       last_id=script_options['last_id'],
                        is_py3=is_py3)
 
         if is_py3:
@@ -467,6 +469,7 @@ def twitter_stream(cmd_args):
     alt_rt_style = option_dict['alt_rt_style']
     screen_name = option_dict['screen_name']
     name = option_dict['name']
+    last_id = option_dict['last_id']
     is_py3 = option_dict['is_py3']
 
     if len(cmd_args) >= 4:
@@ -483,48 +486,71 @@ def twitter_stream(cmd_args):
     re_timer_idx = 0
 
     kwargs = dict(tweet_mode='extended')
-    #kwargs['screen_name'] = script_options['screen_name']
+
+    if name == "twitter":
+        #Twitter has removed home user streams, so we have to do this instead...
+        twitter = Twitter(auth=OAuth(
+            oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
+                          api_version='1.1', domain='api.twitter.com',
+                          retry=True)
+
+        while True:
+            #TODO check with limits for how often we can make requests and how many we have left.
+            if last_id == "":
+                tweet_data = twitter.statuses.home_timeline(exclude_replies=no_home_replies,
+                                                            tweet_mode='extended')
+            else:
+                tweet_data = twitter.statuses.home_timeline(
+                    since_id=last_id,
+                    count=200,
+                    exclude_replies=home_replies,
+                    tweet_mode='extended')
+            if not tweet_data == []:
+                tweet = trim_tweet_data(tweet_data,
+                                        screen_name,
+                                        alt_rt_style,
+                                        is_py3)
+                client = connect()
+                client.sendall(bytes(str(tweet), "utf-8"))
+                client.close()
+                stream_end_message = "Text message"
+
+                #Update last_id (for the stream process)
+                last_id = tweet[-1][2]
+
+            #We have to wait at least a minute because of the twitter rate limits
+            time.sleep(65)
 
     while True:
         try:
-            if name == "twitter":
-                #home timeline stream
-                stream = TwitterStream(auth=OAuth(
-                    oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
-                                       **stream_options,
-                                       domain="userstream.twitter.com")
-                if home_replies:
-                    kwargs['replies'] = "all"
-                tweet_iter = stream.user(**kwargs)
-            else:
-                stream = TwitterStream(auth=OAuth(
-                    oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
-                                       **stream_options)
+            stream = TwitterStream(auth=OAuth(
+                oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
+                                   **stream_options)
 
-                twitter = Twitter(auth=OAuth(
-                    oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
-                                  api_version='1.1', domain='api.twitter.com')
+            twitter = Twitter(auth=OAuth(
+                oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
+                              api_version='1.1', domain='api.twitter.com')
 
-                if stream_args[0] != "&":
-                    follow = stream_args[0]
-                    kwargs['screen_name'] = follow
-                    twitter_data = twitter.users.lookup(**kwargs)
-                    follow_ids = ""
-                    for user in twitter_data:
-                        follow_ids += user['id_str'] + ", "
-                    follow_ids = follow_ids[:-1]
-                    if len(stream_args) == 2:
-                        track = stream_args[1]
-                        kwargs['track'] = track
-                        kwargs['follow'] = follow_ids
-                        tweet_iter = stream.statuses.filter(**kwargs)
-                    else:
-                        kwargs['follow'] = follow_ids
-                        tweet_iter = stream.statuses.filter(**kwargs)
-                else:
+            if stream_args[0] != "&":
+                follow = stream_args[0]
+                kwargs['screen_name'] = follow
+                twitter_data = twitter.users.lookup(**kwargs)
+                follow_ids = ""
+                for user in twitter_data:
+                    follow_ids += user['id_str'] + ", "
+                follow_ids = follow_ids[:-1]
+                if len(stream_args) == 2:
                     track = stream_args[1]
                     kwargs['track'] = track
+                    kwargs['follow'] = follow_ids
                     tweet_iter = stream.statuses.filter(**kwargs)
+                else:
+                    kwargs['follow'] = follow_ids
+                    tweet_iter = stream.statuses.filter(**kwargs)
+            else:
+                track = stream_args[1]
+                kwargs['track'] = track
+                tweet_iter = stream.statuses.filter(**kwargs)
         except:
             stream_end_message = "Connection problem (could not connect to twitter)"
             break
@@ -805,10 +831,6 @@ def get_twitter_data(cmd_args):
             return output
         elif cmd_args[3] == "rt":
             tweet_data = [twitter.statuses.retweet._(cmd_args[4])()]
-            #The home stream prints you messages as well...
-            # TODO add a switch to print this if the user has deatived the home timeline stream.
-            # For all commands like this!
-            tweet_data = []
         elif cmd_args[3] == "d":
             #deletes tweet made by the user _(...) converts the id string to a call
             #returns the tweet that was deleted (not a list(dict) just a dict)
@@ -818,13 +840,9 @@ def get_twitter_data(cmd_args):
             #returns the tweet that was sent (not a list(dict) just a dict)
             #make it into a list so we don't have to write special cases for this
             tweet_data = [twitter.statuses.update(status=h.unescape(cmd_args[4]))]
-            #The home stream prints you messages as well...
-            tweet_data = []
         elif cmd_args[3] == "re":
             tweet_data = [twitter.statuses.update(status=h.unescape(cmd_args[5]),
                                                   in_reply_to_status_id=cmd_args[4])]
-            #The home stream prints you messages as well...
-            tweet_data = []
         elif cmd_args[3] == "new":
             tweet_data = twitter.statuses.home_timeline(
                 since_id=cmd_args[4],
@@ -903,7 +921,6 @@ def get_twitter_data(cmd_args):
         elif cmd_args[3] == "fart":
             twitter.favorites.create(_id=cmd_args[4])
             tweet_data = [twitter.statuses.retweet._(cmd_args[4])()]
-            tweet_data = []
         elif cmd_args[3] == "limits":
             output = ""
             if len(cmd_args) >= 5:
