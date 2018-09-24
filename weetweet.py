@@ -660,7 +660,10 @@ def my_process_cb(data, command, rc, out, err):
     if rc == weechat.WEECHAT_HOOK_PROCESS_ERROR:
         weechat.prnt("", "Error with command '%s'" %
                      command.replace(script_options["oauth_token"],
-                                     "").replace(script_options["oauth_secret"], ""))
+                                     "<token>").replace(script_options["oauth_secret"], "<secret>"))
+        if err != "":
+            weechat.prnt("", "stderr: %s" % err)
+
         return weechat.WEECHAT_RC_OK
 
     data = ast.literal_eval(data)
@@ -732,8 +735,10 @@ def my_process_cb(data, command, rc, out, err):
 
         if end_mes != "id" and end_mes != "":
             weechat.prnt(buffer, "%s%s" % (weechat.prefix("network"), end_mes))
+
     if err != "":
         weechat.prnt("", "stderr: %s" % err)
+
     return weechat.WEECHAT_RC_OK
 
 def get_twitter_data(cmd_args):
@@ -1247,8 +1252,8 @@ def oauth_proc_cb(data, command, rc, out, err):
 
     if rc == weechat.WEECHAT_HOOK_PROCESS_ERROR:
         weechat.prnt("", "Error with command '%s'" %
-                     command.replace(script_options["oauth_token"], "").replace(
-                         script_options["oauth_secret"], ""))
+                     command.replace(script_options["oauth_token"], "<token>").replace(
+                         script_options["oauth_secret"], "<secret>"))
         return weechat.WEECHAT_RC_OK
 
     if len(out) > 16 and out[:16] == "Unexpected error":
