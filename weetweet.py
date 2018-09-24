@@ -211,7 +211,7 @@ index_generator = index_gen()
 def dict_tweet(tweet_id):
     cur_index = tweet_dict['cur_index']
     if not tweet_id in tweet_dict.values():
-        cur_index = index_generator.next()
+        cur_index = next(index_generator)
         tweet_dict[cur_index] = tweet_id
         tweet_dict['cur_index'] = cur_index
         return cur_index
