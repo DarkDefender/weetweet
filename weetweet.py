@@ -518,96 +518,34 @@ def twitter_stream(cmd_args):
 
         while True:
             #TODO check with limits for how often we can make requests and how many we have left.
-            if last_id == "":
-                tweet_data = twitter.statuses.home_timeline(exclude_replies=no_home_replies,
-                                                            tweet_mode='extended')
-            else:
-                tweet_data = twitter.statuses.home_timeline(
-                    since_id=last_id,
-                    count=200,
-                    exclude_replies=home_replies,
-                    tweet_mode='extended')
-            if not tweet_data == []:
-                tweet = trim_tweet_data(tweet_data,
-                                        screen_name,
-                                        alt_rt_style,
-                                        is_py3)
-                client = connect()
-                client.sendall(bytes(str(tweet), "utf-8"))
-                client.close()
-                stream_end_message = "Text message"
-
-                #Update last_id (for the stream process)
-                last_id = tweet[-1][2]
-
-            #We have to wait at least a minute because of the twitter rate limits
-            time.sleep(65)
-
-    while True:
-        try:
-            stream = TwitterStream(auth=OAuth(
-                oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
-                                   **stream_options)
-
-            twitter = Twitter(auth=OAuth(
-                oauth_token, oauth_secret, CONSUMER_KEY, CONSUMER_SECRET),
-                              api_version='1.1', domain='api.twitter.com')
-
-            if stream_args[0] != "&":
-                follow = stream_args[0]
-                kwargs['screen_name'] = follow
-                twitter_data = twitter.users.lookup(**kwargs)
-                follow_ids = ""
-                for user in twitter_data:
-                    follow_ids += user['id_str'] + ", "
-                follow_ids = follow_ids[:-1]
-                if len(stream_args) == 2:
-                    track = stream_args[1]
-                    kwargs['track'] = track
-                    kwargs['follow'] = follow_ids
-                    tweet_iter = stream.statuses.filter(**kwargs)
+            try:
+                if last_id == "":
+                    tweet_data = twitter.statuses.home_timeline(exclude_replies=no_home_replies,
+                                                                tweet_mode='extended')
                 else:
-                    kwargs['follow'] = follow_ids
-                    tweet_iter = stream.statuses.filter(**kwargs)
-            else:
-                track = stream_args[1]
-                kwargs['track'] = track
-                tweet_iter = stream.statuses.filter(**kwargs)
-        except:
-            stream_end_message = "Connection problem (could not connect to twitter)"
-            break
+                    tweet_data = twitter.statuses.home_timeline(
+                        since_id=last_id,
+                        count=200,
+                        exclude_replies=home_replies,
+                        tweet_mode='extended')
+                if not tweet_data == []:
+                    tweet = trim_tweet_data(tweet_data,
+                                            screen_name,
+                                            alt_rt_style,
+                                            is_py3)
+                    client = connect()
+                    client.sendall(bytes(str(tweet), "utf-8"))
+                    client.close()
+                    stream_end_message = "Text message"
 
-        stream_end_message = "Unknown reason"
+                    #Update last_id (for the stream process)
+                    last_id = tweet[-1][2]
 
-        # Iterate over the stream.
-        for tweet in tweet_iter:
-            # You must test that your tweet has text. It might be a delete
-            # or data message.
-            if tweet is None:
-                stream_end_message = "'None' reply"
-            elif tweet is Timeout:
-                stream_end_message = "Timeout"
-            elif tweet is HeartbeatTimeout:
-                stream_end_message = "Heartbeat Timeout"
-            elif tweet is Hangup:
-                stream_end_message = "Hangup"
-            elif tweet.get('full_text') or tweet.get('text'):
-                tweet = trim_tweet_data([tweet],
-                                        screen_name,
-                                        alt_rt_style,
-                                        is_py3)
-                client = connect()
-                client.sendall(bytes(str(tweet), "utf-8"))
-                client.close()
-                stream_end_message = "Text message"
-                # Reset the reconnect timer index when we get a new message
-                re_timer_idx = 0
-            else:
-                #Got a other type of message
-                client = connect()
-                client.sendall(bytes(str(tweet), "utf-8"))
-                client.close()
-                stream_end_message = "Unhandled type message"
+                #We have to wait at least a minute because of the twitter rate limits
+                time.sleep(65)
+            except Exception as e:
+                stream_end_message = str(e)
+                break
 
         client = connect()
         client.sendall(bytes(
