@@ -49,7 +49,7 @@ try:
 except:
     #import html parser so we can convert html strings to plain text
     try:
-        import html.parser
+        import html
     except:
         print("You need to have python3 installed to run this script!")
         exit(0)
@@ -301,7 +301,7 @@ def trim_tweet_data(tweet_data, screen_name, alt_rt_style, is_py3):
     # Because of the huge amount of data, we need to cut down on most of it
     # because we only really want a small subset of it. This also prevents the
     # output buffer from overflowing when fetching many tweets at once.
-    h = html.parser.HTMLParser()
+    h = html
 
     output = []
     for message in tweet_data:
@@ -709,7 +709,7 @@ def get_twitter_data(cmd_args):
     is_py3 = False
     screen_name = ""
 
-    h = html.parser.HTMLParser()
+    h = html
 
     try:
         if cmd_args[-1][0] == "[":
