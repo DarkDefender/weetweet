@@ -520,7 +520,7 @@ def twitter_stream(cmd_args):
             #TODO check with limits for how often we can make requests and how many we have left.
             try:
                 if last_id == "":
-                    tweet_data = twitter.statuses.home_timeline(exclude_replies=no_home_replies,
+                    tweet_data = twitter.statuses.home_timeline(exclude_replies=home_replies,
                                                                 tweet_mode='extended')
                 else:
                     tweet_data = twitter.statuses.home_timeline(
